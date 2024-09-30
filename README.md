@@ -76,9 +76,9 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE.md](L
 
 ## Contato
 
-[Seu Nome] - [@seu_twitter](https://twitter.com/seu_twitter) - email@example.com
+[Rodrigo] - [@rodrigomagalhaes.8]([https://twitter.com/seu_twitter](https://www.threads.net/@rodrigomagalhaes.8)) - falecom@fortalezadigital.net
 
-Link do Projeto: [https://github.com/seu-usuario/bitcoin-analysis-system](https://github.com/seu-usuario/bitcoin-analysis-system)
+Link do Projeto: [https://github.com/seu-usuario/bitcoin-analysis-system](https://github.com/seu-usuario/bitcoin-analysis-system)](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)
 
 ---
 
