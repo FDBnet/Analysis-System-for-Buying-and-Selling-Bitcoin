@@ -26,8 +26,8 @@ Este projeto é um sistema avançado de análise de Bitcoin que combina análise
 
 1. Clone o repositório:
    ```
-   git clone https://github.com/seu-usuario/bitcoin-analysis-system.git
-   cd bitcoin-analysis-system
+   git clone https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin.git
+   cd Analysis-System-for-Buying-and-Selling-Bitcoin
    ```
 
 2. Instale as dependências:
