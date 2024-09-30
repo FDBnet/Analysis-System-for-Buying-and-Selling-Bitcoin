@@ -78,7 +78,7 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE.md](L
 
 [Rodrigo] - [@rodrigomagalhaes.8]([[https://twitter.com/seu_twitter](https://www.threads.net/@rodrigomagalhaes.8)](https://www.threads.net/@rodrigomagalhaes.8)) - falecom@fortalezadigital.net https://www.threads.net/@rodrigomagalhaes.8
 
-Link do Projeto: [[https://github.com/seu-usuario/bitcoin-analysis-system](https://github.com/seu-usuario/bitcoin-analysis-system)](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)
+Link do Projeto: [[Link](https://github.com/seu-usuario/bitcoin-analysis-system)]
 
 ---
 
@@ -167,7 +167,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 [Rodrigo] - [@rodrigomagalhaes.8]([https://www.threads.net/@rodrigomagalhaes.8](https://www.threads.net/@rodrigomagalhaes.8)) - falecom@fortalezadigital.net
 
-Project Link: [[https://github.com/your-user/bitcoin-analysis-system](https://github.com/your-user/bitcoin-analysis-system)](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)
+Project Link: [[Link](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)]
 
 ---
 I am looking for responsible collaboration to make this project work in its entirety. If you have experience in cryptocurrency analysis, machine learning, or trading system development and are interested in contributing, please get in touch. I'm looking for someone who can help refine the algorithms, improve the accuracy of the analysis, and potentially expand the system to other cryptocurrencies. Any help is welcome!
