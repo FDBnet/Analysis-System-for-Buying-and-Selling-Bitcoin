@@ -1,13 +1,4 @@
-# Instale as dependências necessárias: 
-    # pip install yfinance pandas numpy requests aiohttp scikit-learn ta pytrends joblib statsmodels textblob ccxt tweepy
-
-# Substitua as seguintes chaves de API com suas próprias chaves:
-    # YOUR_BINANCE_API_KEY e YOUR_BINANCE_SECRET_KEY
-    # YOUR_GLASSNODE_API_KEY
-    # YOUR_CRYPTOPANIC_API_KEY
-    # TWITTER_CONSUMER_KEY, TWITTER_CONSUMER_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET
-
-import yfinance as yf
+# Por Rodrigo Magalhães, da FDB (https://github.com/FDBnet)
 import pandas as pd
 import numpy as np
 import requests
@@ -18,50 +9,92 @@ import asyncio
 import aiohttp
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestRegressor
+import ta
 from ta import add_all_ta_features
 from pytrends.request import TrendReq
 import joblib
 import warnings
 from statsmodels.tsa.arima.model import ARIMA
-from textblob import TextBlob
-import ccxt
-import tweepy
 import math
+import ssl
+import socket
+import json
+
+# Configuração específica para Windows
+if asyncio.get_event_loop_policy().__class__.__name__ == 'WindowsProactorEventLoopPolicy':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 warnings.filterwarnings('ignore')
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger()
 
-class AdvancedBitcoinAnalyzer:
-    def __init__(self):
-        self.symbol = "BTC/USDT"
-        self.timeframe = "5m"
-        self.buy_threshold = 90
-        self.sell_threshold = 40
-        self.scaler = MinMaxScaler(feature_range=(0, 1))
-        self.model = self.load_or_train_model()
-        self.session = None
-        self.pytrends = TrendReq(hl='en-US', tz=360)
-        self.exchange = ccxt.binance({
-            'apiKey': 'YOUR_BINANCE_API_KEY',
-            'secret': 'YOUR_BINANCE_SECRET_KEY',
-            'enableRateLimit': True,
-            'options': {
-                'defaultType': 'future'
-            }
-        })
-        self.glassnode_api_key = "YOUR_GLASSNODE_API_KEY"
-        self.cryptopanic_api_key = "YOUR_CRYPTOPANIC_API_KEY"
-        self.twitter_api = self.setup_twitter_api()
+def test_ssl_connection(host, port=443):
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((host, port)) as sock:
+            with context.wrap_socket(sock, server_hostname=host) as secure_sock:
+                cipher = secure_sock.cipher()
+                logger.info(f"Successful SSL connection to {host}:{port}")
+                logger.info(f"SSL version: {secure_sock.version()}")
+                logger.info(f"Cipher: {cipher}")
+        return True
+    except ssl.SSLError as e:
+        logger.error(f"SSL error connecting to {host}:{port}: {e}")
+    except socket.error as e:
+        logger.error(f"Socket error connecting to {host}:{port}: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error connecting to {host}:{port}: {e}")
+    return False
 
-    def setup_twitter_api(self):
-        auth = tweepy.OAuthHandler("TWITTER_CONSUMER_KEY", "TWITTER_CONSUMER_SECRET")
-        auth.set_access_token("TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_TOKEN_SECRET")
-        return tweepy.API(auth)
+# Call this method before making API calls
+test_ssl_connection('api.coingecko.com')
+test_ssl_connection('api.github.com')
+
+def rate_limited_api_call(url, max_retries=5, initial_wait=1):
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            if response.status_code == 429:  # Too Many Requests
+                wait_time = initial_wait * (2 ** attempt)  # Exponential backoff
+                logger.warning(f"Rate limit hit. Waiting {wait_time} seconds before retrying.")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"API call failed: {e}")
+                return None
+    logger.error("Max retries reached. Unable to fetch data.")
+    return None
+
+class EnhancedBitcoinAnalyzer:
+    def __init__(self):
+        self.symbol = "bitcoin"
+        self.vs_currency = "usd"
+        self.timeframe = "5m"
+        self.buy_threshold = 75
+        self.sell_threshold = 35
+        self.scaler = MinMaxScaler(feature_range=(0, 1))
+        self.session = None
+        self.pytrends = TrendReq(hl='en-US', tz=360, timeout=(10, 25), retries=2, backoff_factor=0.1)
+        self.coingecko_base_url = "https://api.coingecko.com/api/v3"
+        self.alternative_api_url = "https://api.alternative.me/v2/ticker/bitcoin/"
+        self.github_base_url = "https://api.github.com"
+        self.model = self.load_or_train_model()
+        logging.getLogger().setLevel(logging.ERROR)
+
+    def check_internet_connection(self):
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=5)
+            return True
+        except OSError as e:
+            logger.error(f"Erro na conexão com Internet: {e}")
+            return False
 
     async def initialize(self):
-        self.session = aiohttp.ClientSession()
+        connector = aiohttp.TCPConnector(family=4)
+        self.session = aiohttp.ClientSession(connector=connector)
 
     async def close(self):
         if self.session:
@@ -79,7 +112,7 @@ class AdvancedBitcoinAnalyzer:
 
     def train_model(self):
         df = self.get_historical_data()
-        df = add_all_ta_features(df, open="Open", high="High", low="Low", close="Close", volume="Volume")
+        df = self.add_technical_indicators(df)
         df = df.dropna()
         
         X = df.drop(['Close'], axis=1)
@@ -89,195 +122,248 @@ class AdvancedBitcoinAnalyzer:
         model.fit(X, y)
         return model
 
+    def add_technical_indicators(self, df):
+        required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+        for col in required_columns:
+            if col not in df.columns:
+                df[col] = df['Close']  # Use Close as a fallback
+            df[col] = df[col].replace(0, np.nan).fillna(method='ffill').fillna(method='bfill')
+        
+        logger.info(f"Historical data shape: {df.shape}")
+        logger.info(f"Date range: {df.index.min()} to {df.index.max()}")
+        
+        if len(df) < 14:  # Most indicators require at least 14 data points
+            logger.warning(f"Not enough data points for technical indicators: {len(df)}")
+            return df
+        
+        try:
+            return add_all_ta_features(
+                df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True
+            )
+        except Exception as e:
+            logger.error(f"Error adding technical indicators: {e}")
+            return df
+
     def get_historical_data(self):
-        ohlcv = self.exchange.fetch_ohlcv(self.symbol, self.timeframe, limit=1000)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        df.set_index('timestamp', inplace=True)
-        return df
+        try:
+            url = f"{self.coingecko_base_url}/coins/{self.symbol}/ohlc?vs_currency={self.vs_currency}&days=180"  # Increased to 180 days
+            data = rate_limited_api_call(url)
+            if not data:
+                return pd.DataFrame()
+            
+            df = pd.DataFrame(data, columns=['timestamp', 'Open', 'High', 'Low', 'Close'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df.set_index('timestamp', inplace=True)
+            
+            volume_url = f"{self.coingecko_base_url}/coins/{self.symbol}/market_chart?vs_currency={self.vs_currency}&days=180&interval=daily"
+            volume_data = rate_limited_api_call(volume_url)
+            if not volume_data:
+                return pd.DataFrame()
+            
+            volume_df = pd.DataFrame(volume_data['total_volumes'], columns=['timestamp', 'Volume'])
+            volume_df['timestamp'] = pd.to_datetime(volume_df['timestamp'], unit='ms')
+            volume_df.set_index('timestamp', inplace=True)
+            
+            df = df.join(volume_df)
+            
+            return df
+        except Exception as e:
+            logger.error(f"Erro ao obter dados históricos: {e}")
+            return pd.DataFrame()
 
-    async def get_current_data(self):
-        ohlcv = self.exchange.fetch_ohlcv(self.symbol, self.timeframe, limit=1)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        df.set_index('timestamp', inplace=True)
-        return df.iloc[0]
+    def get_current_data_sync(self):
+        if not self.check_internet_connection():
+            logger.error("Sem conexão com a internet")
+            return pd.Series()
 
-    async def get_on_chain_data(self):
-        async with self.session.get(
-            "https://api.glassnode.com/v1/metrics/indicators/sopr",
-            params={"api_key": self.glassnode_api_key, "a": "BTC", "i": "24h"}
-        ) as response:
-            if response.status == 200:
-                sopr_data = await response.json()
-                sopr = sopr_data[-1]['v'] if sopr_data else None
-            else:
-                logger.error("Falha ao obter dados SOPR")
-                sopr = None
+        url = f"{self.coingecko_base_url}/simple/price?ids={self.symbol}&vs_currencies={self.vs_currency}&include_24hr_vol=true&include_24hr_change=true&include_last_updated_at=true"
+        for _ in range(3):  # Tenta 3 vezes
+            try:
+                response = requests.get(url, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                logger.debug(f"Dados obtidos do CoinGecko: {data}")
+                current_price = data[self.symbol][self.vs_currency]
+                volume = data[self.symbol][f"{self.vs_currency}_24h_vol"]
+                change_24h = data[self.symbol][f"{self.vs_currency}_24h_change"]
+                last_updated = data[self.symbol]['last_updated_at']
+                
+                return pd.Series({
+                    'Close': current_price,
+                    'Volume': volume,
+                    'Change_24h': change_24h,
+                    'Last_Updated': pd.to_datetime(last_updated, unit='s')
+                })
+            except Exception as e:
+                logger.error(f"Erro ao obter dados do CoinGecko: {e}")
+                time.sleep(5)  # Espera 5 segundos antes de tentar novamente
+        
+        # Se falhar, tenta a API alternativa
+        try:
+            response = requests.get(self.alternative_api_url, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            logger.debug(f"Dados obtidos da API alternativa: {data}")
+            bitcoin_data = data['data']['1']  # '1' é o ID do Bitcoin nesta API
+            return pd.Series({
+                'Close': float(bitcoin_data['price_usd']),
+                'Volume': float(bitcoin_data['volume24']),
+                'Change_24h': float(bitcoin_data['percent_change_24h']),
+                'Last_Updated': pd.to_datetime(int(bitcoin_data['last_updated']), unit='s')
+            })
+        except Exception as e:
+            logger.error(f"Erro ao obter dados da API alternativa: {e}")
+        
+        return pd.Series()  # Retorna uma série vazia se todas as tentativas falharem
 
-        nvt = await self.get_nvt_ratio()
-        mvrv = await self.get_mvrv_ratio()
+    def get_market_data(self):
+        url = f"{self.coingecko_base_url}/coins/{self.symbol}"
+        for attempt in range(5):
+            try:
+                response = requests.get(url, timeout=30)
+                if response.status_code == 429:
+                    wait_time = int(response.headers.get('Retry-After', 60))
+                    print(f"Limite de taxa atingido. Aguardando {wait_time} segundos antes de tentar novamente...")
+                    time.sleep(wait_time)
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                return data['market_data']
+            except requests.exceptions.RequestException as e:
+                print(f"Erro ao buscar dados de mercado: {e}")
+                time.sleep(5)
+        
+        print("Falha ao buscar dados do CoinGecko. Tentando fonte alternativa...")
+        return self.get_alternative_market_data()
+    
+    def get_alternative_market_data(self):
+        try:
+            response = requests.get(self.alternative_api_url, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            bitcoin_data = data['data']['1']  # '1' is the ID for Bitcoin in this API
+            return {
+                'current_price': {'usd': float(bitcoin_data['price_usd'])},
+                'market_cap_rank': int(bitcoin_data['rank']),
+                'price_change_percentage_24h': float(bitcoin_data['percent_change_24h']),
+                'market_cap_change_percentage_24h': float(bitcoin_data['percent_change_24h'])  # Using same value as price change
+            }
+        except Exception as e:
+            print(f"Error fetching alternative market data: {e}")
+            return None
 
-        return {
-            'sopr': sopr,
-            'nvt': nvt,
-            'mvrv': mvrv
+    def get_github_data(self):
+        search_query = "bitcoin OR cryptocurrency"
+        url = f"{self.github_base_url}/search/repositories?q={search_query}&sort=stars&order=desc"
+        
+        headers = {
+            "Accept": "application/vnd.github.v3+json"
         }
 
-    async def get_nvt_ratio(self):
-        async with self.session.get(
-            "https://api.glassnode.com/v1/metrics/indicators/nvt",
-            params={"api_key": self.glassnode_api_key, "a": "BTC", "i": "24h"}
-        ) as response:
-            if response.status == 200:
-                nvt_data = await response.json()
-                return nvt_data[-1]['v'] if nvt_data else None
-            else:
-                logger.error("Falha ao obter dados NVT")
-                return None
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            return {
+                'total_count': data['total_count'],
+                'top_repos': data['items'][:5]  # We get the top 5 repositories
+            }
+        except Exception as e:
+            logger.error(f"Falha ao obter dados do GitHub: {e}")
+            return None
+        
+    def analyze_github_data(self, github_data):
+        if not github_data:
+            return 0
 
-    async def get_mvrv_ratio(self):
-        async with self.session.get(
-            "https://api.glassnode.com/v1/metrics/market/mvrv",
-            params={"api_key": self.glassnode_api_key, "a": "BTC", "i": "24h"}
-        ) as response:
-            if response.status == 200:
-                mvrv_data = await response.json()
-                return mvrv_data[-1]['v'] if mvrv_data else None
-            else:
-                logger.error("Falha ao obter dados MVRV")
-                return None
+        score = 0
+        total_count = github_data['total_count']
 
-    async def get_market_sentiment(self):
-        # Google Trends
-        self.pytrends.build_payload(["bitcoin", "crypto", "blockchain"], timeframe='now 1-H')
-        trends_data = self.pytrends.interest_over_time()
-        trends_score = trends_data.iloc[-1].mean()
+        # Pontuação baseada no número total de repositórios
+        if total_count > 100000:
+            score += 10
+        elif total_count > 50000:
+            score += 7
+        elif total_count > 10000:
+            score += 5
+        elif total_count > 1000:
+            score += 3
 
-        # Análise de notícias
-        news_sentiment = await self.get_news_sentiment()
+        # Análise dos principais repositórios
+        for repo in github_data['top_repos']:
+            if repo['stargazers_count'] > 10000:
+                score += 2
+            elif repo['stargazers_count'] > 5000:
+                score += 1
 
-        # Análise de sentimento do Twitter
-        twitter_sentiment = self.get_twitter_sentiment()
+            # Verificar se houve atualizações recentes
+            last_update = datetime.strptime(repo['updated_at'], "%Y-%m-%dT%H:%M:%SZ")
+            if (datetime.now() - last_update).days < 7:
+                score += 1
 
-        # Combinar os diferentes sentimentos
-        combined_sentiment = (trends_score + news_sentiment + twitter_sentiment) / 3
+        return min(score, 20)  # Limite máximo de 20 pontos
 
-        return combined_sentiment
-
-    async def get_news_sentiment(self):
-        async with self.session.get(f"https://cryptopanic.com/api/v1/posts/?auth_token={self.cryptopanic_api_key}&currencies=BTC") as response:
-            if response.status == 200:
-                news_data = await response.json()
-                sentiments = []
-                for item in news_data['results']:
-                    sentiment = TextBlob(item['title']).sentiment.polarity
-                    if item['sentiment'] == 'positive':
-                        sentiment = max(sentiment, 0.1)
-                    elif item['sentiment'] == 'negative':
-                        sentiment = min(sentiment, -0.1)
-                    sentiments.append(sentiment)
-                return np.mean(sentiments) if sentiments else 0
-            else:
-                logger.error("Falha ao obter dados de notícias")
-                return 0
-
-    def get_twitter_sentiment(self):
-        tweets = self.twitter_api.search_tweets(q="bitcoin", count=100, lang="en", tweet_mode="extended")
-        sentiments = [TextBlob(tweet.full_text).sentiment.polarity for tweet in tweets]
-        return np.mean(sentiments)
+    def get_google_trends_data(self):
+        keywords = ["bitcoin", "crypto", "blockchain", "btc price", "bitcoin trading"]
+        url = "https://trends.google.com/trends/api/dailytrends"
+        params = {
+            "hl": "en-US",
+            "tz": "-180",
+            "geo": "US",
+            "ns": "15"
+        }
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.text[5:]  # Remove ")]}',\n" at the beginning
+            trends_data = json.loads(data)
+            
+            logger.info(f"Google Trends data: {json.dumps(trends_data, indent=2)}")
+            
+            score = 0
+            for trend in trends_data['default']['trendingSearchesDays'][0]['trendingSearches']:
+                title = trend['title']['query'].lower()
+                logger.info(f"Analyzing trend: {title}")
+                if any(keyword in title for keyword in keywords):
+                    traffic = int(trend['formattedTraffic'].replace('+', '').replace('K', '000'))
+                    logger.info(f"Relevant trend found: {title} (Traffic: {traffic})")
+                    score += traffic
+                    if any(pos in title for pos in ['bull', 'rise', 'surge', 'green', 'up']):
+                        score += traffic * 0.5
+                    elif any(neg in title for neg in ['bear', 'crash', 'fall', 'drop', 'down']):
+                        score -= traffic * 0.5
+            
+            normalized_score = min(score / 1000, 100)  # Normalize to 0-100
+            logger.info(f"Google Trends sentiment score: {normalized_score}")
+            return normalized_score
+        except Exception as e:
+            logger.error(f"Error fetching Google Trends data: {e}")
+            return 50  # Return a neutral score on error
 
     def predict_price_rf(self, data):
-        features = add_all_ta_features(
-            data, open="Open", high="High", low="Low", close="Close", volume="Volume"
-        ).dropna()
-        prediction = self.model.predict(features.iloc[-1].to_frame().T)
+        features = self.add_technical_indicators(data.to_frame().T)
+        features = features.dropna()
+        
+        # Ensure we only use features that were present during training
+        model_features = self.model.feature_names_in_
+        features = features.reindex(columns=model_features, fill_value=0)
+        
+        prediction = self.model.predict(features)
         return prediction[0]
 
     def predict_price_arima(self, data):
-        model = ARIMA(data['Close'], order=(5,1,0))
-        model_fit = model.fit()
-        forecast = model_fit.forecast(steps=1)
-        return forecast[0]
-
-    async def get_futures_data(self):
+        if len(data) < 5:
+            logger.warning("Not enough data points for ARIMA prediction")
+            return data['Close'].iloc[-1]  # Return the last known price
+        
         try:
-            futures_data = self.exchange.fetch_ohlcv(f'{self.symbol}:USDT', '1h', limit=24)
-            df = pd.DataFrame(futures_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            return df
+            model = ARIMA(data['Close'], order=(5,1,0))
+            model_fit = model.fit()
+            forecast = model_fit.forecast(steps=1)
+            return forecast[0]
         except Exception as e:
-            logger.error(f"Erro ao obter dados de futuros: {e}")
-            return None
-
-    def calculate_implied_volatility(self, data):
-        log_returns = np.log(data['close'] / data['close'].shift(1))
-        return np.sqrt(252) * log_returns.std()
-
-    def calculate_put_call_ratio(self, futures_data):
-        volume = futures_data['volume']
-        price_change = futures_data['close'].pct_change()
-        put_volume = volume[price_change < 0].sum()
-        call_volume = volume[price_change > 0].sum()
-        return put_volume / call_volume if call_volume != 0 else 1
-
-    async def analyze(self):
-        current_data = await self.get_current_data()
-        historical_data = self.get_historical_data()
-        on_chain_data = await self.get_on_chain_data()
-        sentiment = await self.get_market_sentiment()
-        futures_data = await self.get_futures_data()
-
-        rf_prediction = self.predict_price_rf(current_data.to_frame().T)
-        arima_prediction = self.predict_price_arima(historical_data)
-        predicted_price = (rf_prediction + arima_prediction) / 2
-
-        current_price = current_data['Close']
-
-        technical_score = self.calculate_technical_score(historical_data)
-        on_chain_score = self.calculate_on_chain_score(on_chain_data)
-        sentiment_score = self.calculate_sentiment_score(sentiment)
-
-        price_change_prediction = (predicted_price - current_price) / current_price * 100
-        prediction_score = self.calculate_prediction_score(price_change_prediction)
-
-        risk_score = self.calculate_risk_score(historical_data)
-
-        if futures_data is not None:
-            implied_volatility = self.calculate_implied_volatility(futures_data)
-            put_call_ratio = self.calculate_put_call_ratio(futures_data)
-            
-            volatility_score = self.calculate_volatility_score(implied_volatility)
-            market_sentiment_score = self.calculate_market_sentiment_score(put_call_ratio)
-        else:
-            volatility_score = 0
-            market_sentiment_score = 0
-
-        total_score = (
-            technical_score + 
-            on_chain_score + 
-            sentiment_score + 
-            prediction_score - 
-            risk_score +
-            volatility_score +
-            market_sentiment_score
-        )
-
-        logger.info(f"Preço atual do Bitcoin: ${current_price:.2f}")
-        logger.info(f"Preço previsto: ${predicted_price:.2f} ({price_change_prediction:.2f}%)")
-        logger.info(f"Pontuação Técnica: {technical_score}/40")
-        logger.info(f"Pontuação On-Chain: {on_chain_score}/30")
-        logger.info(f"Pontuação de Sentimento: {sentiment_score}/15")
-        logger.info(f"Pontuação de Previsão: {prediction_score}/15")
-        logger.info(f"Pontuação de Risco: -{risk_score}/20")
-        logger.info(f"Pontuação de Volatilidade: {volatility_score}/10")
-        logger.info(f"Pontuação de Sentimento de Mercado: {market_sentiment_score}/10")
-        logger.info(f"Pontuação Total: {total_score}/120")
-
-        recommendation = self.get_recommendation(total_score)
-        logger.info(f"Recomendação: {recommendation}")
-
-        return recommendation, current_price, predicted_price, total_score
+            logger.error(f"Error in ARIMA prediction: {e}")
+            return data['Close'].iloc[-1]  # Return the last known price as a fallback
 
     def calculate_technical_score(self, data):
         score = 0
@@ -302,29 +388,43 @@ class AdvancedBitcoinAnalyzer:
         
         return score
 
-    def calculate_on_chain_score(self, data):
+    def calculate_market_score(self, market_data):
         score = 0
-        if data['sopr'] is not None:
-            if data['sopr'] > 1:
-                score += 10
-        if data['nvt'] is not None:
-            if data['nvt'] < 65:
-                score += 10
-        if data['mvrv'] is not None:
-            if 1 < data['mvrv'] < 3.5:
-                score += 10
+        
+        # Market Cap Rank
+        if market_data['market_cap_rank'] <= 1:
+            score += 10
+        elif market_data['market_cap_rank'] <= 5:
+            score += 5
+        
+        # Price Change Percentage
+        if market_data['price_change_percentage_24h'] > 0:
+            score += 10
+        elif market_data['price_change_percentage_24h'] > -5:
+            score += 5
+        
+        # Market Cap Change Percentage
+        if market_data['market_cap_change_percentage_24h'] > 0:
+            score += 10
+        elif market_data['market_cap_change_percentage_24h'] > -5:
+            score += 5
+        
         return score
 
     def calculate_sentiment_score(self, sentiment):
-        return int((sentiment + 1) / 2 * 15)  # Normaliza de -1 a 1 para 0-15
+        return int(sentiment / 100 * 15)  # Normaliza de 0-100 para 0-15
 
     def calculate_prediction_score(self, price_change_prediction):
         if price_change_prediction > 5:
             return 15
         elif price_change_prediction > 2:
-            return 10
+            return 12
         elif price_change_prediction > 0:
+            return 8
+        elif price_change_prediction > -2:
             return 5
+        elif price_change_prediction > -5:
+            return 2
         return 0
 
     def calculate_risk_score(self, data):
@@ -332,26 +432,22 @@ class AdvancedBitcoinAnalyzer:
         var = np.percentile(returns, 5)
         max_drawdown = (data['Close'] / data['Close'].cummax() - 1).min()
         
-        risk_score = int(-var * 100) + int(-max_drawdown * 100)
-        return min(risk_score, 20)  # Limita a 20 pontos
-
-    def calculate_volatility_score(self, implied_volatility):
-        if implied_volatility > 0.1:
-            return 0
-        elif implied_volatility > 0.05:
-            return 5
-        else:
-            return 10
-
-    def calculate_market_sentiment_score(self, put_call_ratio):
-        if 0.8 <= put_call_ratio <= 1.2:
-            return 5
-        elif put_call_ratio > 1.5:
-            return 0
-        elif put_call_ratio < 0.5:
-            return 10
-        else:
-            return 3
+        # Calculate historical averages
+        historical_var = np.mean([np.percentile(returns[:i], 5) for i in range(30, len(returns))])
+        historical_max_drawdown = np.mean([(data['Close'][:i] / data['Close'][:i].cummax() - 1).min() for i in range(30, len(data))])
+        
+        var_score = int(abs(var / historical_var) * 100)
+        drawdown_score = int(abs(max_drawdown / historical_max_drawdown) * 100)
+        
+        risk_score = (var_score + drawdown_score) // 2
+        
+        logger.info(f"Value at Risk (5%): {var:.2%} (Historical avg: {historical_var:.2%})")
+        logger.info(f"Max Drawdown: {max_drawdown:.2%} (Historical avg: {historical_max_drawdown:.2%})")
+        logger.info(f"VaR Score: {var_score}")
+        logger.info(f"Drawdown Score: {drawdown_score}")
+        logger.info(f"Total Risk Score: {risk_score}")
+        
+        return min(risk_score, 20)  # Still capped at 20 points
 
     def get_recommendation(self, total_score):
         if total_score >= self.buy_threshold:
@@ -361,19 +457,115 @@ class AdvancedBitcoinAnalyzer:
         else:
             return "MANTER"
 
-    async def run(self):
-        await self.initialize()
-        logger.info("Iniciando análise avançada do Bitcoin...")
+    def analyze(self):
         try:
-            while True:
-                recommendation, current_price, predicted_price, score = await self.analyze()
-                logger.info(f"Recomendação: {recommendation} - Preço Atual: ${current_price:.2f} - Preço Previsto: ${predicted_price:.2f} - Pontuação: {score}/120")
-                await asyncio.sleep(600)  # Analisa a cada 10 minutos
+            print("Analisando condições de mercado do Bitcoin...")
+            
+            current_data = self.get_current_data_sync()
+            if current_data.empty:
+                print("Erro: Não foi possível obter dados atuais de mercado.")
+                return None, None, None, None
+
+            historical_data = self.get_historical_data()
+            if historical_data.empty:
+                print("Erro: Não foi possível obter dados históricos.")
+                return None, None, None, None
+
+            market_data = self.get_market_data()
+            if not market_data:
+                print("Aviso: Não foi possível obter dados de mercado. Algumas pontuações podem ser afetadas.")
+
+            sentiment = self.get_google_trends_data()
+            github_data = self.get_github_data()
+
+            rf_prediction = self.predict_price_rf(current_data)
+            arima_prediction = self.predict_price_arima(historical_data)
+            predicted_price = (rf_prediction + arima_prediction) / 2
+
+            current_price = current_data['Close']
+
+            technical_score = self.calculate_technical_score(historical_data)
+            market_score = self.calculate_market_score(market_data) if market_data else 0
+            sentiment_score = self.calculate_sentiment_score(sentiment)
+            github_score = self.analyze_github_data(github_data)
+
+            price_change_prediction = (predicted_price - current_price) / current_price * 100
+            prediction_score = self.calculate_prediction_score(price_change_prediction)
+
+            risk_score = self.calculate_risk_score(historical_data)
+
+            total_score = (
+                technical_score + 
+                market_score + 
+                sentiment_score + 
+                prediction_score +
+                github_score -
+                risk_score
+            )
+
+            print("\n--- Análise de Mercado do Bitcoin ---")
+            print(f"Preço Atual: R${current_price:.2f}")
+            print(f"Preço Previsto: R${predicted_price:.2f} ({price_change_prediction:.2f}%)")
+            print(f"\nPontuações (total de 120):")
+            print(f"Técnica: {technical_score}/40")
+            print(f"Mercado: {market_score}/30")
+            print(f"Sentimento: {sentiment_score}/15")
+            print(f"Previsão: {prediction_score}/15")
+            print(f"Atividade no GitHub: {github_score}/20")
+            print(f"Risco: -{risk_score}/20")
+            print(f"\nPontuação Total: {total_score}/120")
+
+            recommendation = self.get_recommendation(total_score)
+            print(f"\nRecomendação: {recommendation}")
+
+            return recommendation, current_price, predicted_price, total_score
         except Exception as e:
-            logger.error(f"Erro durante a análise: {e}")
-        finally:
-            await self.close()
+            print(f"Ocorreu um erro durante a análise: {e}")
+            return None, None, None, None
+
+    def run(self):
+        print("Bem-vindo ao Analisador de Mercado do Bitcoin")
+        while True:
+            print("\nO que você gostaria de fazer?")
+            print("1. Analisar mercado do Bitcoin")
+            print("2. Ver última análise")
+            print("3. Sair")
+            
+            choice = input("Digite sua escolha (1-3): ")
+            
+            if choice == '1':
+                if not self.check_internet_connection():
+                    print("Erro: Sem conexão com a internet. Por favor, verifique sua conexão e tente novamente.")
+                    continue
+
+                result = self.analyze()
+                if result[0] is not None:
+                    recommendation, current_price, predicted_price, score = result
+                    self.last_analysis = result
+                    print("\nAnálise completa. Você pode ver os resultados selecionando a opção 2.")
+                else:
+                    print("A análise falhou. Por favor, tente novamente mais tarde.")
+            elif choice == '2':
+                if hasattr(self, 'last_analysis'):
+                    recommendation, current_price, predicted_price, score = self.last_analysis
+                    print(f"\nResultados da Última Análise:")
+                    print(f"Recomendação: {recommendation}")
+                    print(f"Preço Atual: R${current_price:.2f}")
+                    print(f"Preço Previsto: R${predicted_price:.2f}")
+                    print(f"Pontuação Geral: {score}/120")
+                else:
+                    print("Nenhuma análise prévia disponível. Por favor, execute uma análise primeiro.")
+            elif choice == '3':
+                print("Obrigado por usar o Analisador de Mercado do Bitcoin. Até logo!")
+                break
+            else:
+                print("Escolha inválida. Por favor, digite 1, 2 ou 3.")
+
+            print("\n" + "-"*40)
+
+def main():
+    analyzer = EnhancedBitcoinAnalyzer()
+    analyzer.run()
 
 if __name__ == "__main__":
-    analyzer = AdvancedBitcoinAnalyzer()
-    asyncio.run(analyzer.run())
+    main()
