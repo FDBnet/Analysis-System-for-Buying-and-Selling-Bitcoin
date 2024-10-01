@@ -40,11 +40,11 @@ def test_ssl_connection(host, port=443):
                 logger.info(f"Cipher: {cipher}")
         return True
     except ssl.SSLError as e:
-        logger.error(f"SSL error connecting to {host}:{port}: {e}")
+        logger.error(f"Erro SSL ao conectar-se a {host}:{port}: {e}")
     except socket.error as e:
-        logger.error(f"Socket error connecting to {host}:{port}: {e}")
+        logger.error(f"Erro de soquete ao conectar {host}:{port}: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error connecting to {host}:{port}: {e}")
+        logger.error(f"Erro inesperado ao conectar-se a {host}:{port}: {e}")
     return False
 
 # Call this method before making API calls
@@ -60,12 +60,12 @@ def rate_limited_api_call(url, max_retries=5, initial_wait=1):
         except requests.exceptions.RequestException as e:
             if response.status_code == 429:  # Too Many Requests
                 wait_time = initial_wait * (2 ** attempt)  # Exponential backoff
-                logger.warning(f"Rate limit hit. Waiting {wait_time} seconds before retrying.")
+                logger.warning(f"Limite de taxa atingido. Aguardando {wait_time} segundos antes de tentar novamente.")
                 time.sleep(wait_time)
             else:
                 logger.error(f"API call failed: {e}")
                 return None
-    logger.error("Max retries reached. Unable to fetch data.")
+    logger.error("Máximo de tentativas atingido. Não é possível buscar dados.")
     return None
 
 class EnhancedBitcoinAnalyzer:
@@ -141,7 +141,7 @@ class EnhancedBitcoinAnalyzer:
                 df, open="Open", high="High", low="Low", close="Close", volume="Volume", fillna=True
             )
         except Exception as e:
-            logger.error(f"Error adding technical indicators: {e}")
+            logger.error(f"Erro ao adicionar indicadores técnicos: {e}")
             return df
 
     def get_historical_data(self):
@@ -272,7 +272,7 @@ class EnhancedBitcoinAnalyzer:
                 'market_cap_change_percentage_24h': float(bitcoin_data['percent_change_24h'])  # Using same value as price change
             }
         except Exception as e:
-            print(f"Error fetching alternative market data: {e}")
+            print(f"Erro ao buscar dados de mercado alternativos: {e}")
             return None
 
     def get_github_data(self):
@@ -357,11 +357,11 @@ class EnhancedBitcoinAnalyzer:
                         score -= traffic * 0.5
             
             normalized_score = min(score / 1000, 100)  # Normalize to 0-100
-            logger.info(f"Google Trends sentiment score: {normalized_score}")
+            logger.info(f"Pontuação de sentimento do Google Trends: {normalized_score}")
             return normalized_score
         except Exception as e:
-            logger.error(f"Error fetching Google Trends data: {e}")
-            return 50  # Return a neutral score on error
+            logger.error(f"Erro ao buscar dados do Google Trends: {e}")
+            return 50  # Retorna uma pontuação neutra em caso de erro
 
     def predict_price_rf(self, data):
         features = self.add_technical_indicators(data.to_frame().T)
@@ -376,8 +376,8 @@ class EnhancedBitcoinAnalyzer:
 
     def predict_price_arima(self, data):
         if len(data) < 5:
-            logger.warning("Not enough data points for ARIMA prediction")
-            return data['Close'].iloc[-1]  # Return the last known price
+            logger.warning("Não há pontos de dados suficientes para a previsão ARIMA")
+            return data['Close'].iloc[-1]  # Retorne o último preço conhecido
         
         try:
             model = ARIMA(data['Close'], order=(5,1,0))
@@ -386,7 +386,7 @@ class EnhancedBitcoinAnalyzer:
             return forecast[0]
         except Exception as e:
             logger.error(f"Error in ARIMA prediction: {e}")
-            return data['Close'].iloc[-1]  # Return the last known price as a fallback
+            return data['Close'].iloc[-1]  # Retorna o último preço conhecido como fallback
 
     def calculate_technical_score(self, data):
         score = 0
