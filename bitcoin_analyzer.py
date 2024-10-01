@@ -149,7 +149,7 @@ class EnhancedBitcoinAnalyzer:
             url = f"{self.coingecko_base_url}/coins/{self.symbol}/ohlc?vs_currency={self.vs_currency}&days=180"  # Increased to 180 days
             data = rate_limited_api_call(url)
             if not data:
-                return pd.DataFrame()
+                raise Exception("Falha ao recuperar dados do CoinGecko")
             
             df = pd.DataFrame(data, columns=['timestamp', 'Open', 'High', 'Low', 'Close'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -158,7 +158,7 @@ class EnhancedBitcoinAnalyzer:
             volume_url = f"{self.coingecko_base_url}/coins/{self.symbol}/market_chart?vs_currency={self.vs_currency}&days=180&interval=daily"
             volume_data = rate_limited_api_call(volume_url)
             if not volume_data:
-                return pd.DataFrame()
+                raise Exception("Falha ao recuperar dados de volume do CoinGecko")
             
             volume_df = pd.DataFrame(volume_data['total_volumes'], columns=['timestamp', 'Volume'])
             volume_df['timestamp'] = pd.to_datetime(volume_df['timestamp'], unit='ms')
@@ -166,10 +166,33 @@ class EnhancedBitcoinAnalyzer:
             
             df = df.join(volume_df)
             
-            return df
         except Exception as e:
-            logger.error(f"Erro ao obter dados históricos: {e}")
-            return pd.DataFrame()
+            logger.error(f"Erro ao obter dados históricos da CoinGecko: {e}")
+            logger.info("Tentando obter dados históricos da API alternativa...")
+            
+            try:
+                url = f"{self.alternative_api_url}?format=chart&timeframe=1-year&roller=24-hours"
+                response = requests.get(url)
+                response.raise_for_status()
+                data = response.json()
+                
+                df = pd.DataFrame(data['data'], columns=['timestamp', 'close', 'volume'])
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+                df.set_index('timestamp', inplace=True)
+                df.rename(columns={'close': 'Close', 'volume': 'Volume'}, inplace=True)
+                
+                # Inferir OHLC a partir do preço de fechamento
+                df['Open'] = df['Close'].shift(1)
+                df['High'] = df['Close']
+                df['Low'] = df['Close']
+                
+                df.dropna(inplace=True)  # Remover primeira linha que terá NaN devido ao deslocamento
+                
+            except Exception as e:
+                logger.error(f"Erro ao obter dados históricos da API alternativa: {e}")
+                return pd.DataFrame()
+
+        return df
 
     def get_current_data_sync(self):
         if not self.check_internet_connection():
