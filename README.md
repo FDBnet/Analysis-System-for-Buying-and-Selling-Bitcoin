@@ -15,8 +15,8 @@ Este projeto é um sistema aprimorado de análise de mercado do Bitcoin que util
 - Análise da distribuição da oferta de Bitcoin
 - Estimativa do EPR (Estimated Price Ratio), uma aproximação do SOPR
 - Cálculo do NVT Ratio (Network Value to Transactions Ratio)
-- Análise da taxa de hash da rede Bitcoin
-- Incorporação de dados macroeconômicos (taxas de juros globais)
+- Análise da taxa de hash da rede Bitcoin _(necessita de correção)_
+- Incorporação de dados macroeconômicos (taxas de juros globais)  _(necessita de correção)_
 - Sistema de pontuação ponderada considerando todos os indicadores
 - Recomendações de compra, venda ou manutenção com base na pontuação final
 - Interface de linha de comando interativa com opções para análise, limpeza de cache e saída
