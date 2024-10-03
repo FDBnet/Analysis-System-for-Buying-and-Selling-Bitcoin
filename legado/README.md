@@ -25,7 +25,7 @@ Este projeto é um sistema avançado de análise de mercado do Bitcoin que combi
 
 1. Clone o repositório:
    ```
-   git clone https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin.git
+   git clone https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin/tree/main/legado.git
    cd Analysis-System-for-Buying-and-Selling-Bitcoin
    ```
 
