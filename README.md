@@ -76,5 +76,6 @@ Link do Projeto: [https://github.com/FDBnet/Analysis-System-for-Buying-and-Selli
 ## Apoie o Projeto
 
 Pix: digocatu@hotmail.com
+
 Bitcoin: bc1qcgxvxp0v9gtac8srkl7rkrvflfdkmtasu35txv
 
