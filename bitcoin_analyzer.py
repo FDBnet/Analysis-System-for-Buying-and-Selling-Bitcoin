@@ -527,8 +527,8 @@ class EnhancedBitcoinAnalyzer:
             )
 
             print("\n--- Análise de Mercado do Bitcoin ---")
-            print(f"Preço Atual: R${current_price:.2f}")
-            print(f"Preço Previsto: R${predicted_price:.2f} ({price_change_prediction:.2f}%)")
+            print(f"Preço Atual: US${current_price:.2f}")
+            print(f"Preço Previsto: US${predicted_price:.2f} ({price_change_prediction:.2f}%)")
             print(f"\nPontuações (total de 120):")
             print(f"Técnica: {technical_score}/40")
             print(f"Mercado: {market_score}/30")
@@ -573,8 +573,8 @@ class EnhancedBitcoinAnalyzer:
                     recommendation, current_price, predicted_price, score = self.last_analysis
                     print(f"\nResultados da Última Análise:")
                     print(f"Recomendação: {recommendation}")
-                    print(f"Preço Atual: R${current_price:.2f}")
-                    print(f"Preço Previsto: R${predicted_price:.2f}")
+                    print(f"Preço Atual: US${current_price:.2f}")
+                    print(f"Preço Previsto: US${predicted_price:.2f}")
                     print(f"Pontuação Geral: {score}/120")
                 else:
                     print("Nenhuma análise prévia disponível. Por favor, execute uma análise primeiro.")
