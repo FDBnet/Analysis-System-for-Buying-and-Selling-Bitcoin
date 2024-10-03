@@ -1,4 +1,4 @@
-# Sistema de Análise de Mercado do Bitcoin
+# Sistema de Análise de Mercado do Bitcoin (Versão Legada)
 
 ## Visão Geral
 
