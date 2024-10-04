@@ -47,7 +47,7 @@ Se você quiser contribuir, por favor:
 Este projeto é apenas para fins educacionais. Não é aconselhamento financeiro e não deve ser usado como base única para decisões de investimento. Investir em criptomoedas envolve riscos significativos. Sempre faça sua própria pesquisa antes de investir.
 
 ## Licença 
-Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](pt-br/LICENSE) para detalhes.
+Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ## Contato
 [Rodrigo S. Magalhães]
