@@ -1,0 +1,13 @@
+pandas
+numpy
+beautifulsoup4
+requests
+logging
+datetime
+time
+random
+json
+urllib3
+textblob
+concurrent-futures
+yfinance
