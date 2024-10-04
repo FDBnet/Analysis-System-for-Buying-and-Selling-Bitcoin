@@ -69,13 +69,24 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICE
 
 ## Contato
 
-[Rodrigo S. Magalhães] - [@rodrigomagalhaes.8](https://www.threads.net/@rodrigomagalhaes.8) - falecom@fortalezadigital.net
+[Rodrigo S. Magalhães] 
 
-Link do Projeto: [https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)
+### Threads
+*[@rodrigomagalhaes.8](https://www.threads.net/@rodrigomagalhaes.8)*
+
+### E-mail
+*falecom@fortalezadigital.net*
+
+*digocatu@hotmail.com*
+
+### Link do Projeto: 
+*[https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)*
 
 ## Apoie o Projeto
 
-Pix: digocatu@hotmail.com
+### *Pix:* 
+digocatu@hotmail.com
 
-Bitcoin: bc1qcgxvxp0v9gtac8srkl7rkrvflfdkmtasu35txv
+### *Bitcoin:*
+bc1q63mezfs72jss00xvqhhjzhld33jzm322wn95x3
 
