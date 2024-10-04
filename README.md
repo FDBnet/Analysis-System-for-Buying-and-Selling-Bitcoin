@@ -67,7 +67,7 @@ _[Rodrigo S. Magalhães]_
 
 ## Help this Project
 
-### *Pix:*
+### *Pix[BR]:*
 digocatu@hotmail.com
 
 ### *Bitcoin:* 
