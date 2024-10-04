@@ -3,10 +3,12 @@
 # AVISOS:
 """
     Há dois principais BUGS:
-    - A obtenção da Taxa de Juros através de Bancos Governamentais não está funcionando como esperado;
+    - A obtenção da Taxa de Juros através do 'Bank of Japan' e 'Bank of England' não está funcionando como esperado;
     - A obtenção do Hash Rate da rede Bitcoin também não está funcionando!
 """
 # SUBSTITUA "SUA_CHAVE_API_AQUI" POR UMA API REAL. CONSIGA UMA EM "https://fredaccount.stlouisfed.org/apikey"
+
+# CONTRIBUA COM O PROJETO DOANDO BITCOIN OU SATOSHIS PARA: bc1qcgxvxp0v9gtac8srkl7rkrvflfdkmtasu35txv
 
 import pandas as pd
 import numpy as np
@@ -23,16 +25,17 @@ from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from textblob import TextBlob
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import yfinance as yf
 
 # Configuração de logging personalizada
 class CustomFormatter(logging.Formatter):
     def format(self, record):
         if record.levelno == logging.INFO:
-            return f"{record.msg}"
+            return f"\n{record.msg}"
         elif record.levelno == logging.WARNING:
-            return f"Aviso: {record.msg}"
+            return f"\nAviso: {record.msg}"
         elif record.levelno == logging.ERROR:
-            return f"Erro: {record.msg}"
+            return f"\nErro: {record.msg}"
         return super().format(record)
 
 # Configuração do logger
@@ -100,6 +103,16 @@ class EnhancedBitcoinAnalyzer:
                     return None
                 time.sleep(2 ** attempt)  # Exponential backoff
         return None
+    
+    def mempool_api_request(self, endpoint):
+        url = f"https://mempool.space/api/{endpoint}"
+        try:
+            response = self.rate_limited_request(url)
+            if response:
+                return response
+        except Exception as e:
+            self.logger.error(f"Erro ao fazer requisição para {url}: {str(e)}")
+        return None
 
     def get_historical_data(self, days=200):
         url = f"{self.coingecko_base_url}/coins/{self.symbol}/market_chart"
@@ -142,9 +155,9 @@ class EnhancedBitcoinAnalyzer:
             return "Não foi possível comparar devido a dados insuficientes."
         
         if current_price > ma_200:
-            return f"O preço atual (${current_price:.2f}) é maior que a média móvel de 200 dias (${ma_200:.2f})."
+            return f"|O preço atual (${current_price:.2f}) é maior que a média móvel de 200 dias (${ma_200:.2f})."
         else:
-            return f"O preço atual (${current_price:.2f}) é menor ou igual à média móvel de 200 dias (${ma_200:.2f})."
+            return f"|O preço atual (${current_price:.2f}) é menor ou igual à média móvel de 200 dias (${ma_200:.2f})."
 
     def estimate_funding_rate(self):
         spot_price = self.get_current_price()
@@ -194,21 +207,16 @@ class EnhancedBitcoinAnalyzer:
     def get_bybit_funding_rate(self):
         try:
             rate = self.get_exchange_funding_rate(
-                "Bybit v2",
-                "https://api.bybit.com/v2/public/tickers",
-                {"symbol": "BTCUSD"},
-                ['result', 0, 'funding_rate']
-            )
-            if rate is not None:
-                return rate
-            
-            self.logger.info("\nAlternando para a API v5 da Bybit...")
-            return self.get_exchange_funding_rate(
                 "Bybit v5",
                 "https://api.bybit.com/v5/market/tickers",
                 {"category": "linear", "symbol": "BTCUSDT"},
                 ['result', 'list', 0, 'fundingRate']
             )
+            if rate is not None:
+                return rate
+            
+            self.logger.warning("Falha ao obter taxa de financiamento da Bybit v5.")
+            return None
         except Exception as e:
             self.logger.error(f"Erro ao obter taxa de financiamento da Bybit: {str(e)}")
             return None
@@ -461,32 +469,39 @@ class EnhancedBitcoinAnalyzer:
     
     def get_network_hashrate(self, days=30):
         """
-        Obtém dados da hash rate da rede Bitcoin.
+        Obtém dados da hash rate da rede Bitcoin usando a API do mempool.space.
         
         :param days: Número de dias para coletar dados
         :return: DataFrame com os dados da hash rate
         """
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
+        endpoint = f"v1/mining/hashrate/{days * 144}"  # 144 blocos por dia em média
+        data = self.mempool_api_request(endpoint)
         
-        url = "https://api.blockchain.info/charts/hash-rate"
-        params = {
-            "start": start_date.strftime("%Y-%m-%d"),
-            "end": end_date.strftime("%Y-%m-%d"),
-            "timespan": f"{days}days",
-            "format": "json"
-        }
-        
-        data = self.rate_limited_request(url, params)
-        if not data or 'values' not in data:
-            logger.warning("Não foi possível obter dados da hash rate da rede")
+        if not data:
+            self.logger.warning("Não foi possível obter dados da hash rate da rede")
             return None
 
-        df = pd.DataFrame(data['values'], columns=['timestamp', 'hashrate'])
+        df = pd.DataFrame(data, columns=['timestamp', 'hashrate'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
         df.set_index('timestamp', inplace=True)
+        df['hashrate'] = df['hashrate'] / 1e9  # Convertendo para EH/s
         
         return df
+    
+    def get_transaction_fees(self):
+        """
+        Obtém dados sobre as taxas de transação atuais na rede Bitcoin.
+        
+        :return: Dict com informações sobre as taxas de transação
+        """
+        endpoint = "v1/fees/recommended"
+        data = self.mempool_api_request(endpoint)
+        
+        if not data:
+            self.logger.warning("Não foi possível obter dados de taxas de transação")
+            return None
+
+        return data
 
     def analyze_network_hashrate(self, hashrate_data):
         if hashrate_data is None or hashrate_data.empty:
@@ -520,10 +535,10 @@ class EnhancedBitcoinAnalyzer:
     
     def get_global_interest_rates(self):
         interest_rates = {
-            'FED (EUA)': self.get_fed_rate(),
-            'BCE (Europa)': self.get_ecb_rate(),
-            'BoJ (Japão)': self.get_boj_rate(),
-            'BoE (Reino Unido)': self.get_boe_rate()
+            '- FED (EUA)': self.get_fed_rate(),
+            '- BCE (Europa)': self.get_ecb_rate(),
+            '- BoJ (Japão)': self.get_boj_rate(),
+            '- BoE (Reino Unido)': self.get_boe_rate()
         }
         
         # Remove None values
@@ -542,16 +557,16 @@ class EnhancedBitcoinAnalyzer:
             response = self.rate_limited_request(url)
             if response:
                 soup = BeautifulSoup(response.text, 'html.parser')
-                rate_element = soup.find('td', string='Federal funds effective rate')
+                rate_element = soup.find('th', id='id94d1cc0', string='Federal funds (effective)')
                 if rate_element:
-                    rate = rate_element.find_next('td').text
+                    rate = rate_element.find_next('td', class_='data').text
                     return float(rate.strip())
             
             # Método secundário: API do FRED (Federal Reserve Economic Data)
             fred_url = "https://api.stlouisfed.org/fred/series/observations"
             params = {
                 "series_id": "FEDFUNDS",
-                "api_key": "SUA_CHAVE_API_AQUI",  # Substitua pela sua chave API
+                "api_key": "SUA_CHAVE_API_AQUI",
                 "sort_order": "desc",
                 "limit": 1,
                 "file_type": "json"
@@ -565,17 +580,25 @@ class EnhancedBitcoinAnalyzer:
         except Exception as e:
             self.logger.error(f"Erro ao obter a taxa do FED: {str(e)}")
             return None
-
+        
     def get_ecb_rate(self):
         try:
             url = "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/key_ecb_interest_rates/html/index.en.html"
             response = self.rate_limited_request(url)
             if response:
                 soup = BeautifulSoup(response.text, 'html.parser')
-                rate_element = soup.find('td', string='Main refinancing operations')
-                if rate_element:
-                    rate = rate_element.find_next('td').text
-                    return float(rate.strip().replace('%', ''))
+                rate_table = soup.find('table')
+                if rate_table:
+                    rows = rate_table.find_all('tr')
+                    for row in rows:
+                        cells = row.find_all('td')
+                        if len(cells) >= 3:
+                            date = cells[0].text.strip()
+                            deposit_rate = cells[1].text.strip()
+                            main_rate = cells[2].text.strip()
+                            if date and deposit_rate and main_rate:
+                                return float(main_rate)
+            self.logger.error("Não foi possível encontrar as taxas do BCE na página.")
             return None
         except Exception as e:
             self.logger.error(f"Erro ao obter taxa do BCE: {str(e)}")
@@ -600,12 +623,13 @@ class EnhancedBitcoinAnalyzer:
         try:
             url = "https://www.bankofengland.co.uk/boeapps/database/Bank-Rate.asp"
             response = self.rate_limited_request(url)
-            if response:
+            if response and isinstance(response, requests.Response):
                 soup = BeautifulSoup(response.text, 'html.parser')
-                rate_element = soup.find('td', string='Bank Rate')
+                rate_element = soup.select_one('.featured-stat .stat-figure')
                 if rate_element:
-                    rate = rate_element.find_next('td').text
-                    return float(rate.strip().replace('%', ''))
+                    rate = rate_element.text.strip().replace('%', '')
+                    return float(rate)
+            self.logger.warning("Não foi possível obter a taxa do Bank of England.")
             return None
         except Exception as e:
             self.logger.error(f"Erro ao obter taxa BOE: {str(e)}")
@@ -615,12 +639,12 @@ class EnhancedBitcoinAnalyzer:
         if rates_data is None or rates_data.empty:
             return "Dados de taxas de juros globais insuficientes para análise."
         
-        analysis = "Análise de Taxas de Juros Globais:\n"
+        analysis = ""
         for _, row in rates_data.iterrows():
             analysis += f"{row['Central Bank']}: {row['Interest Rate']:.2f}%\n"
         
         avg_rate = rates_data['Interest Rate'].mean()
-        analysis += f"\nTaxa média global: {avg_rate:.2f}%\n"
+        analysis += f"\n|Taxa média global: {avg_rate:.2f}%\n"
         
         if avg_rate < 1:
             analysis += "\nAs taxas de juros globais estão muito baixas, o que geralmente é favorável para ativos de risco como o Bitcoin."
@@ -631,11 +655,211 @@ class EnhancedBitcoinAnalyzer:
         
         return analysis
     
+    def analyze_transaction_fees(self, fee_data):
+        if fee_data is None:
+            return "Dados de taxas de transação insuficientes para análise."
+        
+        analysis = ""
+        analysis += f"|Taxa rápida (próximo bloco): {fee_data['fastestFee']} sat/vB\n"
+        analysis += f"|Taxa média (meia hora): {fee_data['halfHourFee']} sat/vB\n"
+        analysis += f"|Taxa econômica (1 hora): {fee_data['hourFee']} sat/vB\n"
+        
+        if fee_data['fastestFee'] > 100:
+            analysis += "\nAs taxas de transação estão muito altas, indicando alta demanda na rede."
+        elif fee_data['fastestFee'] > 50:
+            analysis += "\nAs taxas de transação estão moderadamente altas, sugerindo demanda significativa."
+        elif fee_data['fastestFee'] < 10:
+            analysis += "\nAs taxas de transação estão baixas, indicando pouca congestionamento na rede."
+        else:
+            analysis += "\nAs taxas de transação estão em níveis normais."
+        
+        return analysis
+    
+    def get_recent_blocks(self, max_retries=5, delay=5):
+        """
+        Obtém dados dos blocos mais recentes da API pública do mempool.space
+        
+        :param max_retries: Número máximo de tentativas
+        :param delay: Tempo de espera entre tentativas (em segundos)
+        :return: Lista de dicionários com dados dos blocos ou None em caso de falha
+        """
+        url = "https://mempool.space/api/v1/blocks"
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except requests.RequestException as e:
+                self.logger.warning(f"Tentativa {attempt + 1} falhou: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(delay * (2 ** attempt))
+        
+        self.logger.error(f"Falha ao obter dados dos blocos recentes após {max_retries} tentativas")
+        return None
+
+    def analyze_recent_blocks(self, blocks_data):
+        if not blocks_data:
+            return "Dados de blocos recentes indisponíveis para análise."
+        
+        analysis = "Análise de Blocos Recentes:\n"
+        avg_block_size = sum(block['size'] for block in blocks_data) / len(blocks_data)
+        avg_tx_count = sum(block['tx_count'] for block in blocks_data) / len(blocks_data)
+        
+        analysis += f"|Tamanho médio dos blocos: {avg_block_size / 1000:.2f} KB\n"
+        analysis += f"|Média de transações por bloco: {avg_tx_count:.0f}\n"
+        
+        if avg_block_size > 1_300_000:  # 1.3 MB
+            analysis += "Os blocos estão quase cheios, indicando alta demanda na rede.\n"
+        elif avg_block_size < 500_000:  # 500 KB
+            analysis += "Os blocos estão relativamente vazios, sugerindo baixa demanda na rede.\n"
+        else:
+            analysis += "O tamanho dos blocos está em níveis normais.\n"
+        
+        return analysis
+    
+    def get_mempool_data(self, max_retries=5, delay=5):
+        """
+        Obtém dados do mempool da API pública do mempool.space
+        
+        :param max_retries: Número máximo de tentativas
+        :param delay: Tempo de espera entre tentativas (em segundos)
+        :return: Dicionário com dados do mempool ou None em caso de falha
+        """
+        url = "https://mempool.space/api/v1/mempool"
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except requests.RequestException as e:
+                self.logger.warning(f"Tentativa {attempt + 1} falhou: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(delay * (2 ** attempt))
+        
+        self.logger.error(f"Falha ao obter dados do mempool após {max_retries} tentativas")
+        return None
+
+    def analyze_mempool(self, mempool_data):
+        if not mempool_data:
+            return "Dados do mempool indisponíveis para análise."
+        
+        analysis = "Análise do Mempool:\n"
+        analysis += f"|Tamanho do mempool: {mempool_data['vsize'] / 1_000_000:.2f} MB\n"
+        analysis += f"|Número de transações: {mempool_data['count']}\n"
+        
+        if mempool_data['vsize'] > 80_000_000:  # 80 MB
+            analysis += "O mempool está muito congestionado. Espere taxas de transação altas.\n"
+        elif mempool_data['vsize'] < 5_000_000:  # 5 MB
+            analysis += "O mempool está relativamente vazio. As taxas de transação devem estar baixas.\n"
+        else:
+            analysis += "O mempool está em níveis normais.\n"
+        
+        return analysis
+    
+    def get_mining_difficulty(self, max_retries=5, delay=5):
+        """
+        Obtém dados de dificuldade de mineração da API pública do mempool.space
+        
+        :param max_retries: Número máximo de tentativas
+        :param delay: Tempo de espera entre tentativas (em segundos)
+        :return: Dicionário com dados de dificuldade ou None em caso de falha
+        """
+        url = "https://mempool.space/api/v1/difficulty-adjustment"
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                return response.json()
+            except requests.RequestException as e:
+                self.logger.warning(f"Tentativa {attempt + 1} falhou: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(delay * (2 ** attempt))
+        
+        self.logger.error(f"Falha ao obter dados de dificuldade após {max_retries} tentativas")
+        return None
+
+    def analyze_mining_difficulty(self, difficulty_data):
+        if not difficulty_data:
+            return "Dados de dificuldade de mineração indisponíveis para análise."
+        
+        analysis = "Análise da Dificuldade de Mineração:\n"
+        
+        try:
+            current_difficulty = difficulty_data.get('current_difficulty')
+            if current_difficulty is not None:
+                analysis += f"|Dificuldade atual: {current_difficulty:,}\n"
+            else:
+                analysis += "Dificuldade atual não disponível.\n"
+            
+            estimated_retarget = difficulty_data.get('estimated_retarget_percentage')
+            if estimated_retarget is not None:
+                analysis += f"|Estimativa de mudança: {estimated_retarget:.2f}%\n"
+            else:
+                analysis += "Estimativa de mudança não disponível.\n"
+            
+            remaining_blocks = difficulty_data.get('remaining_blocks')
+            if remaining_blocks is not None:
+                analysis += f"|Blocos até o ajuste: {remaining_blocks}\n"
+            else:
+                analysis += "Número de blocos até o ajuste não disponível.\n"
+            
+            if estimated_retarget is not None:
+                if estimated_retarget > 5:
+                    analysis += "A dificuldade provavelmente aumentará, indicando aumento na capacidade de mineração.\n"
+                elif estimated_retarget < -5:
+                    analysis += "A dificuldade provavelmente diminuirá, possivelmente indicando redução na capacidade de mineração.\n"
+                else:
+                    analysis += "A dificuldade deve permanecer relativamente estável.\n"
+        except Exception as e:
+            self.logger.error(f"Erro ao analisar dificuldade de mineração: {str(e)}")
+            analysis += "Ocorreu um erro ao analisar os dados de dificuldade de mineração.\n"
+        
+        return analysis
+
+    def get_bitcoin_dominance(self):
+        """
+        Obtém a dominância atual do Bitcoin no mercado de criptomoedas.
+        
+        :return: Float representando a porcentagem de dominância do Bitcoin ou None se não for possível obter os dados
+        """
+        url = "https://api.coingecko.com/api/v3/global"
+        try:
+            data = self.rate_limited_request(url)
+            
+            if data and isinstance(data, dict) and 'data' in data:
+                market_data = data['data']
+                if 'market_cap_percentage' in market_data and 'btc' in market_data['market_cap_percentage']:
+                    return market_data['market_cap_percentage']['btc']
+            
+            self.logger.warning("Não foi possível obter dados de dominância do Bitcoin da API")
+            return None
+        except Exception as e:
+            self.logger.error(f"Erro ao obter dominância do Bitcoin: {str(e)}")
+            return None
+
+    def analyze_bitcoin_dominance(self, dominance):
+        if dominance is None:
+            return "Dados de dominância do Bitcoin insuficientes para análise."
+        
+        analysis = f"Dominância do Bitcoin: {dominance:.2f}%\n"
+        
+        if dominance > 60:
+            analysis += "A alta dominância do Bitcoin sugere forte confiança no BTC em relação a outras criptomoedas."
+        elif dominance < 40:
+            analysis += "A baixa dominância do Bitcoin pode indicar um aumento no interesse por altcoins ou uma diminuição na confiança no BTC."
+        else:
+            analysis += "A dominância do Bitcoin está em níveis moderados, sugerindo um equilíbrio entre BTC e altcoins."
+        
+        return analysis
+
     def analyze(self):
         self.logger.info("\nIniciando análise do mercado de Bitcoin...")
         print("\nAnalisando o mercado de Bitcoin...", end="", flush=True)
         
-        with ThreadPoolExecutor(max_workers=12) as executor:
+        with ThreadPoolExecutor(max_workers=16) as executor:
             futures = {
                 executor.submit(self.compare_price_to_ma): "price_comparison",
                 executor.submit(self.estimate_funding_rate): "estimated_funding_rate",
@@ -649,23 +873,28 @@ class EnhancedBitcoinAnalyzer:
                 executor.submit(self.get_historical_data, days=30): "price_data_for_epr",
                 executor.submit(self.calculate_nvt_ratio): "nvt_data",
                 executor.submit(self.get_network_hashrate): "hashrate_data",
-                executor.submit(self.get_global_interest_rates): "global_rates_data"
+                executor.submit(self.get_global_interest_rates): "global_rates_data",
+                executor.submit(self.get_transaction_fees): "transaction_fees",
+                executor.submit(self.get_recent_blocks): "recent_blocks",
+                executor.submit(self.get_mining_difficulty): "mining_difficulty",
+                executor.submit(self.get_bitcoin_dominance): "bitcoin_dominance",
             }
             
             results = {}
+
             for future in as_completed(futures):
                 try:
                     results[futures[future]] = future.result()
-                    print(".", end="", flush=True)  # Indicador de progresso                    
+                    print(".", end="", flush=True)
                 except Exception as e:
-                    self.logger.error(f"Erro ao obter {futures[future]}")
+                    self.logger.error(f"Erro ao obter {futures[future]}: {str(e)}")
                     results[futures[future]] = None
-                    print("x", end="", flush=True)  # Indicador de erro
+                    print("x", end="", flush=True)
 
         print("\nAnálise concluída!")
 
         # Calcula o EPR
-        price_data_for_epr = results['price_data_for_epr']
+        price_data_for_epr = results.get('price_data_for_epr')
         if price_data_for_epr is not None and not price_data_for_epr.empty:
             epr_data = self.calculate_epr(price_data_for_epr)
             results['epr_data'] = epr_data
@@ -675,132 +904,137 @@ class EnhancedBitcoinAnalyzer:
         self.print_analysis_results(results)
 
     def get_master_evaluation(self, results):
-        price_trend = 1 if "maior que" in results['price_comparison'] else -1
-        
-        funding_rates = [
-            results['estimated_funding_rate'],
-            results['binance_rate'],
-            results['bybit_rate'],
-            results['okex_rate']
-        ]
-        valid_rates = [r for r in funding_rates if r is not None]
-        avg_funding_rate = np.mean(valid_rates) if valid_rates else 0
-        
-        sentiment_score = results['sentiment_score']
-        
-        rsi_value, _ = results['rsi_data']
-        rsi_score = 0
-        if rsi_value is not None:
-            if rsi_value > 70:
-                rsi_score = -1  # Sinal de venda
-            elif rsi_value < 30:
-                rsi_score = 1  # Sinal de compra
-        
-        macd_values, _ = results['macd_data']
-        macd_score = 0
-        if macd_values is not None:
-            macd, signal, _ = macd_values
-            if macd > signal:
-                macd_score = 1  # Sinal de compra
-            elif macd < signal:
-                macd_score = -1  # Sinal de venda
-        
-        supply_distribution_data = results['supply_distribution_data']
-        supply_distribution_score = 0
-        if supply_distribution_data:
-            percent_circulante = (supply_distribution_data['circulante'] / supply_distribution_data['max']) * 100
-            if percent_circulante > 90:
-                supply_distribution_score = 1  # Sinal positivo (ampla distribuição)
-            elif percent_circulante < 80:
-                supply_distribution_score = -1  # Sinal negativo (possível concentração)
-        
-        epr_data = results['epr_data']
-        epr_score = 0
-        if epr_data is not None and not epr_data.empty:
-            latest_epr = epr_data.iloc[-1]
-            if latest_epr > 1:
-                epr_score = 1  # Possível momento de alta
-            elif latest_epr < 1:
-                epr_score = -1   # Possível momento de baixa
-        
-        nvt_data = results['nvt_data']
-        nvt_score = 0
-        if nvt_data is not None and not nvt_data.empty:
-            latest_nvt = nvt_data['nvt_ratio'].iloc[-1]
-            avg_nvt = nvt_data['nvt_ratio'].mean()
-            if latest_nvt > avg_nvt * 1.2:
-                nvt_score = -1  # Possível sobrevalorização
-            elif latest_nvt < avg_nvt * 0.8:
-                nvt_score = 1   # Possível subvalorização
-        
-        hashrate_data = results['hashrate_data']
-        hashrate_score = 0
-        if hashrate_data is not None and not hashrate_data.empty:
-            latest_hashrate = hashrate_data['hashrate'].iloc[-1]
-            avg_hashrate = hashrate_data['hashrate'].mean()
-            pct_change = ((latest_hashrate - hashrate_data['hashrate'].iloc[0]) / hashrate_data['hashrate'].iloc[0]) * 100
+        try:
+            price_trend = 1 if "maior que" in results.get('price_comparison', '') else -1
             
-            if latest_hashrate > avg_hashrate * 1.1 or pct_change > 10:
-                hashrate_score = 1  # Sinal positivo
-            elif latest_hashrate < avg_hashrate * 0.9 or pct_change < -10:
-                hashrate_score = -1  # Sinal negativo
+            funding_rates = [
+                results.get('estimated_funding_rate'),
+                results.get('binance_rate'),
+                results.get('bybit_rate'),
+                results.get('okex_rate')
+            ]
+            valid_rates = [r for r in funding_rates if r is not None]
+            avg_funding_rate = np.mean(valid_rates) if valid_rates else 0
+            
+            sentiment_score = results.get('sentiment_score', 50)  # Valor neutro se não disponível
+            
+            rsi_data = results.get('rsi_data', (None, ''))
+            rsi_value, _ = rsi_data if isinstance(rsi_data, tuple) else (None, '')
+            rsi_score = 0
+            if rsi_value is not None:
+                if rsi_value > 70:
+                    rsi_score = -1
+                elif rsi_value < 30:
+                    rsi_score = 1
+            
+            macd_data = results.get('macd_data', (None, ''))
+            macd_values, _ = macd_data if isinstance(macd_data, tuple) else (None, '')
+            macd_score = 0
+            if macd_values is not None:
+                macd, signal, _ = macd_values
+                if macd > signal:
+                    macd_score = 1
+                elif macd < signal:
+                    macd_score = -1
         
-        global_rates_data = results['global_rates_data']
-        global_rates_score = 0
-        if global_rates_data is not None and not global_rates_data.empty:
-            avg_rate = global_rates_data['Interest Rate'].mean()
-            if avg_rate < 1:
-                global_rates_score = 1  # Favorável para Bitcoin
-            elif avg_rate > 3:
-                global_rates_score = -1  # Menos favorável para Bitcoin
-        
-        # Ajuste os pesos para incluir as Taxas de Juros Globais
-        price_weight = 0.15
-        funding_weight = 0.11
-        sentiment_weight = 0.11
-        rsi_weight = 0.15
-        macd_weight = 0.11
-        supply_distribution_weight = 0.11
-        epr_weight = 0.07
-        nvt_weight = 0.07
-        hashrate_weight = 0.06
-        global_rates_weight = 0.06
-        
-        # Cálculo do score final (incluindo Taxas de Juros Globais)
-        final_score = (
-            price_trend * price_weight +
-            (-1 if avg_funding_rate > 0 else 1) * funding_weight +
-            (sentiment_score / 50 - 1) * sentiment_weight +
-            rsi_score * rsi_weight +
-            macd_score * macd_weight +
-            supply_distribution_score * supply_distribution_weight +
-            epr_score * epr_weight +
-            nvt_score * nvt_weight +
-            hashrate_score * hashrate_weight +
-            global_rates_score * global_rates_weight
-        )
-        
-        # Interpretação do score final
-        if final_score > 0.5:
-            return "COMPRAR", final_score
-        elif final_score < -0.5:
-            return "VENDER", final_score
-        else:
-            return "MANTER", final_score
+            supply_distribution_data = results['supply_distribution_data']
+            supply_distribution_score = 0
+            if supply_distribution_data:
+                percent_circulante = (supply_distribution_data['circulante'] / supply_distribution_data['max']) * 100
+                if percent_circulante > 90:
+                    supply_distribution_score = 1  # Sinal positivo (ampla distribuição)
+                elif percent_circulante < 80:
+                    supply_distribution_score = -1  # Sinal negativo (possível concentração)
+            
+            epr_data = results['epr_data']
+            epr_score = 0
+            if epr_data is not None and not epr_data.empty:
+                latest_epr = epr_data.iloc[-1]
+                if latest_epr > 1:
+                    epr_score = 1  # Possível momento de alta
+                elif latest_epr < 1:
+                    epr_score = -1   # Possível momento de baixa
+            
+            nvt_data = results['nvt_data']
+            nvt_score = 0
+            if nvt_data is not None and not nvt_data.empty:
+                latest_nvt = nvt_data['nvt_ratio'].iloc[-1]
+                avg_nvt = nvt_data['nvt_ratio'].mean()
+                if latest_nvt > avg_nvt * 1.2:
+                    nvt_score = -1  # Possível sobrevalorização
+                elif latest_nvt < avg_nvt * 0.8:
+                    nvt_score = 1   # Possível subvalorização
+            
+            hashrate_data = results['hashrate_data']
+            hashrate_score = 0
+            if hashrate_data is not None and not hashrate_data.empty:
+                latest_hashrate = hashrate_data['hashrate'].iloc[-1]
+                avg_hashrate = hashrate_data['hashrate'].mean()
+                pct_change = ((latest_hashrate - hashrate_data['hashrate'].iloc[0]) / hashrate_data['hashrate'].iloc[0]) * 100
+                
+                if latest_hashrate > avg_hashrate * 1.1 or pct_change > 10:
+                    hashrate_score = 1  # Sinal positivo
+                elif latest_hashrate < avg_hashrate * 0.9 or pct_change < -10:
+                    hashrate_score = -1  # Sinal negativo
+            
+            global_rates_data = results['global_rates_data']
+            global_rates_score = 0
+            if global_rates_data is not None and not global_rates_data.empty:
+                avg_rate = global_rates_data['Interest Rate'].mean()
+                if avg_rate < 1:
+                    global_rates_score = 1  # Favorável para Bitcoin
+                elif avg_rate > 3:
+                    global_rates_score = -1  # Menos favorável para Bitcoin
+            
+            # Ajuste os pesos para incluir as Taxas de Juros Globais
+            price_weight = 0.15
+            funding_weight = 0.11
+            sentiment_weight = 0.11
+            rsi_weight = 0.15
+            macd_weight = 0.11
+            supply_distribution_weight = 0.11
+            epr_weight = 0.07
+            nvt_weight = 0.07
+            hashrate_weight = 0.06
+            global_rates_weight = 0.06
+            
+            # Cálculo do score final (incluindo Taxas de Juros Globais)
+            final_score = (
+                price_trend * price_weight +
+                (-1 if avg_funding_rate > 0 else 1) * funding_weight +
+                (sentiment_score / 50 - 1) * sentiment_weight +
+                rsi_score * rsi_weight +
+                macd_score * macd_weight +
+                supply_distribution_score * supply_distribution_weight +
+                epr_score * epr_weight +
+                nvt_score * nvt_weight +
+                hashrate_score * hashrate_weight +
+                global_rates_score * global_rates_weight
+            )
+            
+            # Interpretação do score final
+            if final_score > 0.5:
+                return "COMPRAR", final_score
+            elif final_score < -0.5:
+                return "VENDER", final_score
+            else:
+                return "MANTER", final_score
+        except Exception as e:
+            self.logger.error(f"Erro na avaliação final: {str(e)}")
+            return "INCONCLUSIVO", 0
 
     def print_analysis_results(self, results):
         print("\n" + "="*50)
-        print("ANÁLISE DE MERCADO DO BITCOIN")
+        print(" ## ANÁLISE DE MERCADO DO BITCOIN ##")
         print("="*50 + "\n")
         print(results['price_comparison'])
         print("\n # Funding Rates:")
-        print(f"{'Exchange':<10} {'Rate':>10}")
+        print(f"{'Exchange':<12} {'Rate':>12}")
         print("-"*22)
-        
-        for exchange, rate_key in [("|Estimativa", "estimated_funding_rate"), 
-                                   ("|Binance", "binance_rate"), 
-                                   ("|Bybit", "bybit_rate"), 
-                                   ("|OKX", "okex_rate")]:
+        for exchange, rate_key in [("- Estimativa", "estimated_funding_rate"), 
+                                   ("- Binance", "binance_rate"), 
+                                   ("- Bybit", "bybit_rate"), 
+                                   ("- OKX", "okex_rate")]:
             if results[rate_key] is not None:
                 print(f"{exchange:<10} {results[rate_key]:>10.4f}%")
         
@@ -810,7 +1044,7 @@ class EnhancedBitcoinAnalyzer:
         valid_rates = [r for r in [results['binance_rate'], results['bybit_rate'], results['okex_rate']] if r is not None]
         if valid_rates:
             avg_rate = np.mean(valid_rates)
-            print(f"\n # Média das Funding Rates: {avg_rate:.4f}%")
+            print(f"\n|Média das Funding Rates: {avg_rate:.4f}%")
             if abs(avg_rate) > 0.1:  # 0.1%
                 print("Atenção: Média das Funding Rates está elevada,")
                 print("indicando possível volatilidade no mercado.")
@@ -884,11 +1118,46 @@ class EnhancedBitcoinAnalyzer:
 
         print("\n # Análise Macroeconômica de Taxas de Juros Globais:")
         global_rates_data = results.get('global_rates_data')
-        if results.get('global_rates_data') is None:
-            print("\nNão foi possível obter dados completos de taxas de juros globais.")
-            self.logger.warning("Dados de taxas de juros globais parcialmente indisponíveis para análise.")
+        if global_rates_data is not None:
+            print(self.analyze_global_interest_rates(global_rates_data))
+        else:
+            print("Não foi possível obter dados completos de taxas de juros globais.")
         
+        print("\n # Análise de Taxas de Transação:")
+        transaction_fees = results.get('transaction_fees')
+        if transaction_fees:
+            print(self.analyze_transaction_fees(transaction_fees))
+        else:
+            print("Não foi possível obter dados de taxas de transação.")
         
+        print("\n # Análise de Blocos Recentes:")
+        recent_blocks = results.get('recent_blocks')
+        if recent_blocks:
+            print(self.analyze_recent_blocks(recent_blocks))
+        else:
+            print("Não foi possível obter dados de blocos recentes.")
+
+        print("\n # Análise do Status do Mempool:")
+        mempool_status = results.get('mempool_status')
+        if mempool_status:
+            print(self.analyze_mempool(mempool_status))
+        else:
+            print("Não foi possível obter dados do status do mempool.")
+
+        print("\n # Análise da Dificuldade de Mineração:")
+        mining_difficulty = results.get('mining_difficulty')
+        if mining_difficulty:
+            print(self.analyze_mining_difficulty(mining_difficulty))
+        else:
+            print("Não foi possível obter dados de dificuldade de mineração.")
+
+        print("\n # Análise de Dominância do Bitcoin:")
+        bitcoin_dominance = results.get('bitcoin_dominance')
+        if bitcoin_dominance is not None:
+            print(self.analyze_bitcoin_dominance(bitcoin_dominance))
+        else:
+            print("Não foi possível obter dados de dominância do Bitcoin.")
+ 
         print("\n \n ## AVALIAÇÃO FINAL:")
         recommendation, score = self.get_master_evaluation(results)
         print(f"|Recomendação: {recommendation}")
