@@ -62,7 +62,7 @@ _[Rodrigo S. Magalhães]_
 *digocatu@hotmail.com*
 
 ### Project Link:
-*[https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin](https://github.com/FDBnet/Sistema-de-Análise-para-Compra-e-Venda-de-Bitcoin)*
+*[https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)*
 
 
 ## Help this Project
