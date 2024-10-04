@@ -1,4 +1,5 @@
 # Enhanced Bitcoin Market Analyzer (Updated) 
+US English version
 
 ## Overview 
 This project is an enhanced Bitcoin market analysis system that uses price data, technical indicators, funding rates, Google Trends sentiment, on-chain data, and macroeconomic analysis to provide a comprehensive assessment of the market. The system collects data from multiple sources, performs analysis, and provides buy, sell, or hold recommendations based on a weighted rating model.
