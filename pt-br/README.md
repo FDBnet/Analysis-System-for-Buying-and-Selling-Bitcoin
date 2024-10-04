@@ -31,6 +31,7 @@ Este projeto é um sistema aprimorado de análise de mercado do Bitcoin que util
 
 ## Uso Execute o script principal: 
 ``` python analisador_bitcoin.py ``` 
+
 O sistema será iniciado e apresentará um menu interativo. Você pode escolher realizar uma nova análise, limpar o cache de dados ou sair do programa.
 
 ## Contribuição
