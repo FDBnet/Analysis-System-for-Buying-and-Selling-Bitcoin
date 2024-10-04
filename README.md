@@ -1,92 +1,69 @@
-# Analisador de Mercado do Bitcoin Aprimorado (atualizado)
+# Enhanced Bitcoin Market Analyzer (Updated) 
 
-## Visão Geral
+## Overview 
+This project is an enhanced Bitcoin market analysis system that uses price data, technical indicators, funding rates, Google Trends sentiment, on-chain data, and macroeconomic analysis to provide a comprehensive assessment of the market. The system collects data from multiple sources, performs analysis, and provides buy, sell, or hold recommendations based on a weighted rating model.
 
-Este projeto é um sistema aprimorado de análise de mercado do Bitcoin que utiliza dados de preço, indicadores técnicos, taxas de financiamento, sentimento do Google Trends, dados on-chain e análise macroeconômica para fornecer uma avaliação abrangente do mercado. O sistema coleta dados de várias fontes, realiza análises e fornece recomendações de compra, venda ou manutenção com base em um modelo de pontuação ponderada.
+## Features
+- Collects Bitcoin price and volume data via CoinGecko API
+- Compares current price to 200-day moving average
+- Estimates future funding rates based on historical data
+- Gets current funding rates from Binance, Bybit, and OKX exchanges
+- Analyzes market sentiment using Google Trends data
+- Calculates technical indicators such as RSI and MACD
+- Analyzes Bitcoin supply distribution
+- Estimates EPR (Estimated Price Ratio), an approximation of SOPR
+- Calculates NVT Ratio (Network Value to Transactions Ratio)
+- Analyzes Bitcoin network hash rate _[needs correction]_
+- Incorporates macroeconomic data (global interest rates) _[needs correction]_
+- Weighted rating system considering all indicators
+- Makes buy, sell, or hold recommendations based on the final score
+- Interactive command-line interface with options for analysis, cache clearing, and output
+- Logs activity and errors using Python's logging module
 
-## Funcionalidades
-
-- Coleta de dados de preço e volume do Bitcoin através da CoinGecko API
-- Comparação do preço atual com a média móvel de 200 dias
-- Estimativa da taxa de financiamento futura com base em dados históricos
-- Obtenção das taxas de financiamento atuais das bolsas Binance, Bybit e OKX
-- Análise de sentimento do mercado usando dados do Google Trends
-- Cálculo de indicadores técnicos como RSI e MACD
-- Análise da distribuição da oferta de Bitcoin
-- Estimativa do EPR (Estimated Price Ratio), uma aproximação do SOPR
-- Cálculo do NVT Ratio (Network Value to Transactions Ratio)
-- Análise da taxa de hash da rede Bitcoin _[necessita de correção]_
-- Incorporação de dados macroeconômicos (taxas de juros globais)  _[necessita de correção]_
-- Sistema de pontuação ponderada considerando todos os indicadores
-- Recomendações de compra, venda ou manutenção com base na pontuação final
-- Interface de linha de comando interativa com opções para análise, limpeza de cache e saída
-- Registro de atividades e erros usando o módulo de logging do Python
-
-## Requisitos
-
+## Requirements 
 - Python 3.6+
-- Bibliotecas Python (veja `requirements.txt`)
+- Python libraries (see `requirements.txt`)
 
-## Instalação
+## Installation 
+1. Clone the repository: ``` git clone https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin.git cd Analysis-System-for-Buying-and-Selling-Bitcoin ```
+2. Install the dependencies: ``` pip install -r requirements.txt ```
 
-1. Clone o repositório:
-   ```
-   git clone https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin.git
-   cd Analysis-System-for-Buying-and-Selling-Bitcoin
-   ```
+## Usage Run the main script: 
+``` python bitcoin_analyzer.py ``` 
+The system will start and present an interactive menu. You can choose to perform a new analysis, clear the data cache, or exit the program.
 
-2. Instale as dependências:
-   ```
-   pip install -r requirements.txt
-   ```
+## Contribution 
+Contributions are welcome! 
+If you would like to contribute, please: 
+1. Fork the repository
+2. Create a branch for your feature (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to a branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## Uso
+## Disclaimer 
+This project is for educational purposes only. It is not financial advice and should not be used as the sole basis for investment decisions. Investing in cryptocurrencies involves significant risks. Always do your own research before investing.
 
-Execute o script principal:
-```
-python bitcoin_analyzer.py
-```
+## License 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-O sistema iniciará e apresentará um menu interativo. Você pode escolher realizar uma nova análise, limpar o cache de dados ou sair do programa.
-
-## Contribuição
-
-Contribuições são bem-vindas! Se você quiser contribuir, por favor:
-
-1. Faça um fork do repositório
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Faça commit das suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## Aviso Legal
-
-Este projeto é apenas para fins educacionais. Não é aconselhamento financeiro e não deve ser usado como base única para decisões de investimento. Investir em criptomoedas envolve riscos significativos. Sempre faça sua própria pesquisa antes de investir.
-
-## Licença
-
-Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
-
-## Contato
-
-[Rodrigo S. Magalhães] 
+## Contact
+[Rodrigo S. Magalhães]
 
 ### Threads
 *[@rodrigomagalhaes.8](https://www.threads.net/@rodrigomagalhaes.8)*
 
-### E-mail
-*falecom@fortalezadigital.net*
+### Email
+*falecom@fortalezadigital.net* *digocatu@hotmail.com*
 
-*digocatu@hotmail.com*
+### Project Link:
+*[https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin](https://github.com/FDBnet/Sistema-de-Análise-para-Compra-e-Venda-de-Bitcoin)*
 
-### Link do Projeto: 
-*[https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin)*
 
-## Apoie o Projeto
+## Help this Project
 
-### *Pix:* 
+### *Pix:*
 digocatu@hotmail.com
 
-### *Bitcoin:*
+### *Bitcoin:* 
 bc1q63mezfs72jss00xvqhhjzhld33jzm322wn95x3
-
