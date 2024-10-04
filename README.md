@@ -26,8 +26,10 @@ This project is an enhanced Bitcoin market analysis system that uses price data,
 - Python libraries (see `requirements.txt`)
 
 ## Installation 
-1. Clone the repository: ``` git clone https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin.git cd Analysis-System-for-Buying-and-Selling-Bitcoin ```
-2. Install the dependencies: ``` pip install -r requirements.txt ```
+1. Clone the repository: ``` git clone https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin.git
+
+   cd Analysis-System-for-Buying-and-Selling-Bitcoin ```
+3. Install the dependencies: ``` pip install -r requirements.txt ```
 
 ## Usage Run the main script: 
 ``` python bitcoin_analyzer.py ``` 
