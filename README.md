@@ -48,7 +48,7 @@ This project is for educational purposes only. It is not financial advice and sh
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contact
-[Rodrigo S. Magalhães]
+_[Rodrigo S. Magalhães]_
 
 ### Threads
 *[@rodrigomagalhaes.8](https://www.threads.net/@rodrigomagalhaes.8)*
