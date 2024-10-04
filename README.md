@@ -31,6 +31,7 @@ This project is an enhanced Bitcoin market analysis system that uses price data,
 
 ## Usage Run the main script: 
 ``` python bitcoin_analyzer.py ``` 
+
 The system will start and present an interactive menu. You can choose to perform a new analysis, clear the data cache, or exit the program.
 
 ## Contribution 
