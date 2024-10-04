@@ -57,10 +57,11 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICE
 *[@rodrigomagalhaes.8](https://www.threads.net/@rodrigomagalhaes.8)*
 
 ### E-mail
-*falecom@fortalezadigital.net* *digocatu@hotmail.com*
+*falecom@fortalezadigital.net*
+*digocatu@hotmail.com*
 
 ### Link do Projeto:
-*[https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin](https://github.com/FDBnet /Sistema-de-Análise-para-Compra-e-Venda-de-Bitcoin)*
+*[https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin/pt-br/](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin/pt-br/)*
 
 ## Apoie o Projeto
 
