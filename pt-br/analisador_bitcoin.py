@@ -8,8 +8,6 @@
 """
 # SUBSTITUA "SUA_CHAVE_API_AQUI" POR UMA API REAL. CONSIGA UMA EM "https://fredaccount.stlouisfed.org/apikey"
 
-# CONTRIBUA COM O PROJETO DOANDO BITCOIN OU SATOSHIS PARA: bc1qcgxvxp0v9gtac8srkl7rkrvflfdkmtasu35txv
-
 # VERSÃO EM PORTUGUÊS DO BRASIL
 
 import pandas as pd
@@ -1212,12 +1210,25 @@ class EnhancedBitcoinAnalyzer:
 
 class GoogleTrendsAnalyzer:
     def __init__(self):
+        # Inicialize o logger para esta classe
+        self.logger = logging.getLogger("GoogleTrendsAnalyzer")
+        self.logger.setLevel(logging.INFO)
+        
+        # Adicione um handler se não houver nenhum
+        if not self.logger.handlers:
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            ch.setFormatter(formatter)
+            self.logger.addHandler(ch)
+
+        # Restante do código de inicialização...
         self.keywords = [
             "bitcoin", "crypto", "blockchain", "btc price", "bitcoin trading",
             "bitcoin investment", "cryptocurrency market", "bitcoin news",
             "bitcoin halving", "bitcoin wallet", "bitcoin mining"
         ] 
-        self.regions = ["US", "GB", "JP", "KR", "DE", "NG"]  # Principais mercados de criptomoedas
+        self.regions = ["US", "GB", "JP", "KR", "DE", "NG"]
         self.url = "https://trends.google.com/trends/api/dailytrends"
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
