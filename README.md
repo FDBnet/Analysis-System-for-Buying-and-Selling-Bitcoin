@@ -1,6 +1,8 @@
 # Enhanced Bitcoin Market Analyzer (Updated) 
 US English version
 
+_If you want a better and more robust version, use the PT-BR (Brazilian Portuguese) version. [Click here to open](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin/tree/main/pt-br)._
+
 ## Overview 
 This project is an enhanced Bitcoin market analysis system that uses price data, technical indicators, funding rates, Google Trends sentiment, on-chain data, and macroeconomic analysis to provide a comprehensive assessment of the market. The system collects data from multiple sources, performs analysis, and provides buy, sell, or hold recommendations based on a weighted rating model.
 
