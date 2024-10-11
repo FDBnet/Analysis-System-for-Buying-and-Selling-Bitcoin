@@ -8,6 +8,8 @@
 """
 # SUBSTITUA "SUA_CHAVE_API_AQUI" POR UMA API REAL. CONSIGA UMA EM "https://fredaccount.stlouisfed.org/apikey"
 
+# SE FOI ÚTIL PARA VOCÊ, CONSIDERE PAGAR UM CAFÉZINHO AO COLEGA PELO ENDEREÇO BITCOIN: bc1q63mezfs72jss00xvqhhjzhld33jzm322wn95x3
+
 # VERSÃO EM PORTUGUÊS DO BRASIL
 
 import pandas as pd
@@ -26,6 +28,11 @@ from requests.packages.urllib3.util.retry import Retry
 from textblob import TextBlob
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
+from sklearn.preprocessing import MinMaxScaler
+from statsmodels.tsa.arima.model import ARIMA
+from scipy import stats
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_squared_error
 
 # Configuração de logging personalizada
 class CustomFormatter(logging.Formatter):
@@ -155,9 +162,9 @@ class EnhancedBitcoinAnalyzer:
             return "Não foi possível comparar devido a dados insuficientes."
         
         if current_price > ma_200:
-            return f"|O preço atual (${current_price:.2f}) é maior que a média móvel de 200 dias (${ma_200:.2f})."
+            return f"|O preço atual (US$ {current_price:.2f}) é maior que a média móvel de 200 dias (US$ {ma_200:.2f})."
         else:
-            return f"|O preço atual (${current_price:.2f}) é menor ou igual à média móvel de 200 dias (${ma_200:.2f})."
+            return f"|O preço atual (US$ {current_price:.2f}) é menor ou igual à média móvel de 200 dias (US$ {ma_200:.2f})."
 
     def estimate_funding_rate(self):
         spot_price = self.get_current_price()
@@ -855,6 +862,47 @@ class EnhancedBitcoinAnalyzer:
         
         return analysis
 
+    def predict_bitcoin_price_24h(self, results):
+        try:
+            historical_data = self.get_historical_data(days=60)  # Dados dos últimos 60 dias
+            predictor = AdvancedBitcoinPricePredictor(historical_data, results)
+            prediction_summary = predictor.get_prediction_summary()
+            return prediction_summary
+        except Exception as e:
+            self.logger.error(f"Erro ao prever o preço do Bitcoin: {str(e)}")
+            return None
+
+    def print_price_prediction(self, results):
+        prediction_summary = self.predict_bitcoin_price_24h(results)
+        
+        if prediction_summary:
+            current_price = prediction_summary['current_price']
+            predicted_price = prediction_summary['predicted_price']
+            confidence_interval = prediction_summary['confidence_interval']
+            percent_change = prediction_summary['percent_change']
+            factors = prediction_summary.get('factors', {})
+            
+            print("\n # Previsão de Preço para as Próximas 24 Horas:")
+            print(f"|Preço atual: US$ {current_price:.2f}")
+            print(f"|Preço previsto: US$ {predicted_price:.2f}")
+            print(f"|Intervalo de confiança (95%): US$ {confidence_interval[0]:.2f} - US$ {confidence_interval[1]:.2f}")
+            print(f"|Variação percentual prevista: {percent_change:.2f}%")
+            print(f"|Peso do modelo ARIMA: {prediction_summary['arima_weight']:.2f}")
+            print(f"|Peso dos fatores de mercado: {prediction_summary['factor_weight']:.2f}")
+            
+            if abs(percent_change) > 5:
+                print("\nAtenção: A variação prevista é significativa.")
+
+            print("\nNota: Esta previsão combina análise técnica (ARIMA, RSI, MACD)")
+            print("com fatores fundamentais e sentimento de mercado.")
+            print("O modelo limita as mudanças diárias previstas para refletir a realidade do mercado.")
+            print("Lembre-se que o mercado de criptomoedas é altamente volátil e imprevisível.")
+            print("Use esta previsão como uma ferramenta informativa, não como base única para decisões de investimento.")
+            print("Sempre faça sua própria pesquisa e considere sua tolerância ao risco.")
+        else:
+            print("\n # Previsão de Preço para as Próximas 24 Horas:")
+            print("Não foi possível calcular uma previsão confiável neste momento.")
+            
     def analyze(self):
         self.logger.info("\nIniciando análise do mercado de Bitcoin...")
         print("\nAnalisando o mercado de Bitcoin...", end="", flush=True)
@@ -902,6 +950,8 @@ class EnhancedBitcoinAnalyzer:
             results['epr_data'] = None
 
         self.print_analysis_results(results)
+        print("\nAguarde...")
+        self.print_price_prediction(results)
 
     def get_master_evaluation(self, results):
         try:
@@ -1208,6 +1258,160 @@ class EnhancedBitcoinAnalyzer:
 
             print("\n" + "-"*50)
 
+class AdvancedBitcoinPricePredictor:
+    def __init__(self, historical_data, results):
+        self.historical_data = historical_data
+        self.results = results
+        self.scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.arima_weight = 0.6
+        self.factor_weight = 0.4
+        self.feedback_factor = 0.05
+        self.previous_predictions = []
+        self.max_daily_change = 0.15  # Limite máximo de mudança diária (15%)
+
+    def prepare_data(self):
+        self.prices = self.historical_data['price'].values
+        self.dates = self.historical_data.index
+        self.normalized_prices = self.scaler.fit_transform(self.prices.reshape(-1, 1)).flatten()
+
+    def arima_forecast(self, train_data):
+        model = ARIMA(train_data, order=(5,1,0))
+        model_fit = model.fit()
+        forecast = model_fit.forecast(steps=1)
+        return self.scaler.inverse_transform(forecast.reshape(-1, 1))[0][0]
+
+    def calculate_factors(self):
+        factors = {}
+        
+        # RSI
+        rsi_value, _ = self.results.get('rsi_data', (None, ''))
+        if rsi_value is not None:
+            factors['rsi'] = (70 - rsi_value) / 30  # Invertido para refletir sobrecompra
+
+        # MACD
+        macd_data = self.results.get('macd_data', (None, ''))[0]
+        if macd_data is not None:
+            macd, signal, _ = macd_data
+            factors['macd'] = (macd - signal) / max(abs(macd), abs(signal))
+
+        # Tendência de preço
+        factors['price_trend'] = 1 if "maior que" in self.results.get('price_comparison', '') else -1
+
+        # Sentimento do mercado
+        sentiment_score = self.results.get('sentiment_score', 50)
+        factors['sentiment'] = (sentiment_score - 50) / 25
+
+        # NVT Ratio
+        nvt_data = self.results.get('nvt_data')
+        if nvt_data is not None and not nvt_data.empty:
+            latest_nvt = nvt_data['nvt_ratio'].iloc[-1]
+            avg_nvt = nvt_data['nvt_ratio'].mean()
+            factors['nvt'] = (latest_nvt - avg_nvt) / avg_nvt
+
+        # Hash Rate
+        hashrate_data = self.results.get('hashrate_data')
+        if hashrate_data is not None and not hashrate_data.empty:
+            latest_hashrate = hashrate_data['hashrate'].iloc[-1]
+            avg_hashrate = hashrate_data['hashrate'].mean()
+            factors['hashrate'] = (latest_hashrate - avg_hashrate) / avg_hashrate
+
+        # Taxas de juros globais
+        global_rates_data = self.results.get('global_rates_data')
+        if global_rates_data is not None and not global_rates_data.empty:
+            avg_rate = global_rates_data['Interest Rate'].mean()
+            factors['global_rates'] = -((avg_rate - 2) / 2)
+
+        return factors
+
+    def weighted_factor_score(self, factors):
+        weights = {
+            'rsi': 0.15, 'macd': 0.15, 'price_trend': 0.2, 
+            'sentiment': 0.1, 'nvt': 0.1, 'hashrate': 0.1, 'global_rates': 0.1
+        }
+        
+        total_score = sum(factors.get(factor, 0) * weight for factor, weight in weights.items())
+        total_weight = sum(weight for factor, weight in weights.items() if factor in factors)
+        
+        return total_score / total_weight if total_weight > 0 else 0
+
+    def cross_validate(self):
+        tscv = TimeSeriesSplit(n_splits=5)
+        mse_arima = []
+        mse_combined = []
+
+        for train_index, test_index in tscv.split(self.normalized_prices):
+            train, test = self.normalized_prices[train_index], self.normalized_prices[test_index]
+            
+            arima_pred = self.arima_forecast(train)
+            mse_arima.append(mean_squared_error([test[0]], [arima_pred]))
+            
+            factors = self.calculate_factors()
+            factor_score = self.weighted_factor_score(factors)
+            combined_pred = self.arima_weight * arima_pred + self.factor_weight * factor_score * train[-1]
+            mse_combined.append(mean_squared_error([test[0]], [combined_pred]))
+
+        if np.mean(mse_arima) < np.mean(mse_combined):
+            self.arima_weight += 0.05
+            self.factor_weight -= 0.05
+        else:
+            self.arima_weight -= 0.05
+            self.factor_weight += 0.05
+
+        self.arima_weight = max(0.3, min(0.7, self.arima_weight))
+        self.factor_weight = 1 - self.arima_weight
+
+    def calculate_volatility(self):
+        returns = np.diff(self.prices) / self.prices[:-1]
+        daily_volatility = np.std(returns)
+        return daily_volatility * np.sqrt(7)  # Volatilidade semanal
+
+    def predict_price(self):
+        self.prepare_data()
+        self.cross_validate()
+
+        arima_prediction = self.arima_forecast(self.normalized_prices)
+        factors = self.calculate_factors()
+        factor_score = self.weighted_factor_score(factors)
+
+        current_price = self.prices[-1]
+        arima_change = (arima_prediction - current_price) / current_price
+        factor_influence = factor_score * self.max_daily_change
+
+        predicted_change = self.arima_weight * arima_change + self.factor_weight * factor_influence
+
+        if self.previous_predictions:
+            last_prediction, last_actual = self.previous_predictions[-1]
+            prediction_error = (last_actual - last_prediction) / last_prediction
+            predicted_change += self.feedback_factor * prediction_error
+
+        predicted_change = max(min(predicted_change, self.max_daily_change), -self.max_daily_change)
+        predicted_price = current_price * (1 + predicted_change)
+
+        volatility = self.calculate_volatility()
+        confidence_interval = stats.norm.interval(0.95, loc=predicted_price, scale=predicted_price * volatility)
+        
+        self.previous_predictions.append((predicted_price, current_price))
+        if len(self.previous_predictions) > 10:
+            self.previous_predictions.pop(0)
+
+        return predicted_price, confidence_interval, factors
+
+    def get_prediction_summary(self):
+        predicted_price, confidence_interval, factors = self.predict_price()
+        current_price = self.prices[-1]
+        
+        summary = {
+            "current_price": current_price,
+            "predicted_price": predicted_price,
+            "confidence_interval": confidence_interval,
+            "percent_change": ((predicted_price - current_price) / current_price) * 100,
+            "arima_weight": self.arima_weight,
+            "factor_weight": self.factor_weight,
+            "factors": factors
+        }
+        
+        return summary
+        
 class GoogleTrendsAnalyzer:
     def __init__(self):
         # Inicialize o logger para esta classe
