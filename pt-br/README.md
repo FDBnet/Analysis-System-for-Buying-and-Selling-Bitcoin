@@ -1,6 +1,8 @@
 # Analisador de Mercado do Bitcoin Aprimorado (atualizado) 
 Versão em PT-BR (Português do Brasil)
 
+Melhor Versão! Esta Versão em Português está melhor e mais atualizada do que a em Inglês.
+
 ## Visão Geral 
 Este projeto é um sistema aprimorado de análise de mercado do Bitcoin que utiliza dados de preço, indicadores técnicos, taxas de financiamento, sentimento do Google Trends, dados on-chain e análise macroeconômica para fornecer uma avaliação abrangente do mercado. O sistema recolhe dados de diversas fontes, realiza análises e fornece recomendações de compra, venda ou manutenção com base num modelo de classificação ponderada.
 
