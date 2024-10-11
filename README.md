@@ -1,4 +1,4 @@
-# Enhanced Bitcoin Market Analyzer (Updated) 
+# Enhanced Bitcoin Market Analyzer 
 US English version
 
 _If you want a better and more robust version, use the PT-BR (Brazilian Portuguese) version. [Click here to open](https://github.com/FDBnet/Analysis-System-for-Buying-and-Selling-Bitcoin/tree/main/pt-br)._
