@@ -3,11 +3,11 @@ numpy
 beautifulsoup4
 requests
 logging
-datetime
-time
-random
-json
+textblob
+yfinance
+scikit-learn
+statsmodels
+scipy
 urllib3
 textblob
 concurrent-futures
-yfinance
